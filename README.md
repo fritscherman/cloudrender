@@ -24,7 +24,7 @@ or the page source can get past it. It is not access control.
 The repository carries a `Dockerfile` (nginx, port 80), so Coolify can deploy it directly:
 
 1. In Coolify: **+ New → Resource → Public Repository** (or a private one via the GitHub App) and enter `https://github.com/fritscherman/cloudrender`, branch `main`.
-2. **Build Pack:** `Dockerfile`. **Ports Exposes:** `80`.
+2. **Build Pack:** `Dockerfile`. **Ports Exposes:** `80` (nginx also listens on `3000`, Coolify's default, so leaving it at `3000` works too).
 3. Under **Domains**, enter the domain, e.g. `https://cloudflight.example.com`. Coolify issues the TLS certificate itself. HTTPS is required: the page's password check uses the browser's crypto API, which only exists on secure origins.
 4. Optional, for a real server-side password: under **Environment Variables** set `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD` (runtime, not build-time). nginx then asks for them before serving anything; `/healthz` stays open for the health check.
 5. **Deploy.** Health check path: `/healthz`.
@@ -38,3 +38,12 @@ docker build -t cloudflight .
 docker run --rm -p 8080:80 -e BASIC_AUTH_USER=airbus -e BASIC_AUTH_PASSWORD=secret cloudflight
 # http://localhost:8080
 ```
+
+### "Bad Gateway"
+
+Coolify's proxy reached no running server on the port it was told. Check, in this order:
+
+1. **Build Pack** is `Dockerfile`. Left on `Nixpacks`, it detects `build.py` as a Python app; `nixpacks.toml` now makes that case serve the page too (without basic auth).
+2. **Ports Exposes** is `80` or `3000`, and no **Ports Mappings** entry overrides it.
+3. The deployment log ends with the container **running/healthy**. If it says *exited* or *restarting*, the container log shows why.
+4. The **Domain** starts with `https://` (or `http://`) and its DNS points at the Coolify server.

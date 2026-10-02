@@ -5,5 +5,5 @@ COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY deploy/40-basic-auth.sh /docker-entrypoint.d/40-basic-auth.sh
 RUN chmod +x /docker-entrypoint.d/40-basic-auth.sh
 COPY index.html /usr/share/nginx/html/index.html
-EXPOSE 80
+EXPOSE 80 3000
 HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1/healthz || exit 1

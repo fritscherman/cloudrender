@@ -1,0 +1,7 @@
+# Fallback if Coolify's build pack is left on "Nixpacks" instead of "Dockerfile":
+# serve the static page on the port Coolify assigns.
+[phases.setup]
+nixPkgs = ["python3"]
+
+[start]
+cmd = "python3 -m http.server ${PORT:-3000} --bind 0.0.0.0"
