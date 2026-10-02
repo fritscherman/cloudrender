@@ -1,0 +1,729 @@
+<title>Cloud Flight</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* VIOSO Styleguide 22: Quicksand Medium headlines, Quicksand Regular text,
+   primary #0095db, secondary #00eaa9, screen background #212121, white text.
+   Gradients and lines only DIAGONAL (a ray of light), hexagon pattern as a
+   background element. Layout: the live view dominates, its controls sit
+   beside it; the explanation follows in one reading column. */
+:root {
+  --bg: #212121;
+  --panel: #2a2a2a;
+  --panel-2: #323232;
+  --line: #3e3e3e;
+  --fg: #ffffff;
+  --muted: #b8b8b8;
+  --brand: #0095db;
+  --brand-2: #00eaa9;
+  --sky: #2fb0ef;          /* the primary, lifted for small text on #212121 */
+  --sun: #f4b860;          /* diagram only: the sun and its light */
+  --ray: linear-gradient(45deg, var(--brand), var(--brand-2));
+  --head: "Quicksand", "Nunito", "Varela Round", system-ui, sans-serif;
+  --body: "Quicksand", "Nunito", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --r: 6px;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body { font: 400 16px/1.6 var(--body); }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-inline: 16px; }
+@media (min-width: 720px) { .wrap { padding-inline: 32px; } }
+:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+button, input, select { font: inherit; color: inherit; }
+
+/* the oblique line with the hexagon pattern beyond it (styleguide p. 7/8) */
+.hexfield {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+}
+.hexfield svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* ── gate ─────────────────────────────────────────── */
+#gate { position: relative; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); }
+.gate-card {
+  position: relative; width: min(380px, 100%); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 28px 24px;
+  display: grid; gap: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.45);
+}
+.gate-card h1 { margin: 0; font: 500 34px/1.1 var(--head); color: var(--fg); }
+.gate-card p { margin: 0; color: var(--muted); font-size: 15px; }
+.gate-card label { font-size: 13px; font-weight: 500; color: var(--muted); }
+.gate-row { display: flex; gap: 8px; }
+.gate-row input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: var(--r); border: 1px solid var(--line); background: var(--bg); }
+.btn { padding: 9px 14px; border-radius: var(--r); border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; font-weight: 600; font-size: 14px; }
+.btn:hover { border-color: var(--brand); }
+.btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+.btn.primary:hover { background: #10a5ea; }
+#gate-err { color: var(--sun); font-size: 14px; min-height: 1.2em; }
+.gate-logo { height: 30px; width: auto; display: block; margin-bottom: 4px; }
+
+/* ── header & hero ────────────────────────────────── */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 20px; }
+.brand { display: flex; align-items: center; gap: 14px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.brand img { height: 26px; width: auto; display: block; }
+.brand span { padding-left: 14px; border-left: 1px solid var(--line); }
+.brand b { color: var(--fg); font-weight: 600; }
+.lang { display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.lang button { background: none; border: 0; padding: 5px 10px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+.lang button[aria-pressed="true"] { background: var(--brand); color: #fff; }
+
+.hero { position: relative; }
+.hero .hexfield { left: auto; width: 46%; opacity: .9; }
+@media (max-width: 760px) { .hero .hexfield { display: none; } }
+.hero-text { position: relative; display: grid; gap: 10px; padding-block: 8px 26px; max-width: 760px; }
+.eyebrow { font-size: 14px; font-weight: 600; color: var(--brand-2); }
+.hero-text h1 { margin: 0; font: 500 clamp(44px, 7.5vw, 80px)/1 var(--head); letter-spacing: -.01em; text-wrap: balance; }
+.hero-text p { margin: 0; font-size: 18px; color: #e6e6e6; max-width: 62ch; }
+
+/* ── deck: viewport + panel ───────────────────────── */
+.deck { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .deck { grid-template-columns: minmax(0, 1fr) 330px; align-items: start; } }
+.view { position: relative; aspect-ratio: 16 / 9; max-width: 100%; border-radius: 8px; overflow: hidden; background: #000; }
+.view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.view:fullscreen { border-radius: 0; aspect-ratio: auto; }
+.hud { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; align-items: flex-end; pointer-events: none; }
+.hud-data { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 11px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; background: rgba(20,20,20,.62); color: #f2f2f2; padding: 6px 8px; border-radius: 4px; backdrop-filter: blur(4px); white-space: nowrap; }
+.chip i { font-style: normal; color: var(--brand-2); margin-right: 6px; }
+.hud-btns { display: flex; gap: 6px; pointer-events: auto; }
+.hud-btns button { font-size: 12px; font-weight: 600; cursor: pointer; background: rgba(20,20,20,.62); color: #fff; border: 1px solid rgba(255,255,255,.2); padding: 6px 10px; border-radius: 4px; backdrop-filter: blur(4px); }
+.hud-btns button:hover { border-color: var(--brand); }
+#gl-err { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 16px; min-width: 0; }
+.panel h2 { margin: 0; font: 500 16px var(--head); color: var(--sky); }
+.group { display: grid; gap: 8px; }
+.scenes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.scene { text-align: left; padding: 8px 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; font-size: 14px; font-weight: 600; line-height: 1.25; }
+.scene small { display: block; color: var(--muted); font-size: 12px; font-weight: 500; margin-top: 2px; }
+.scene:hover { border-color: var(--brand); }
+.scene[aria-pressed="true"] { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); background: rgba(0,149,219,.18); }
+.field { display: grid; gap: 4px; }
+.field label, .field .lbl { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.field output { font: 500 12px var(--mono); color: var(--fg); font-variant-numeric: tabular-nums; }
+select { width: 100%; padding: 7px 9px; border-radius: var(--r); border: 1px solid var(--line); background: var(--panel-2); font-size: 14px; font-weight: 500; }
+input[type="range"] { width: 100%; accent-color: var(--brand); margin: 2px 0; }
+input[type="range"]:disabled { opacity: .35; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.seg button { border: 0; background: var(--panel-2); padding: 7px 4px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--brand); color: #fff; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.flash-btn { width: 100%; }
+
+/* ── facts ────────────────────────────────────────── */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-block: 28px 8px; }
+.fact { background: var(--bg); padding: 16px; display: grid; gap: 2px; }
+.fact b { font: 500 36px/1.1 var(--head); color: var(--brand-2); font-variant-numeric: tabular-nums; }
+.fact span { font-size: 14px; color: var(--muted); }
+
+/* ── sections ─────────────────────────────────────── */
+section.block { padding-block: 52px 8px; display: grid; gap: 20px; }
+section.block h2 { margin: 0; font: 500 clamp(30px, 4.2vw, 42px)/1.1 var(--head); color: var(--sky); text-wrap: balance; }
+section.block .intro { margin: 0; color: #e6e6e6; max-width: 66ch; font-size: 17px; }
+.how { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 960px) { .how { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: start; } }
+.diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; }
+.diagram svg { display: block; width: 100%; min-width: 480px; height: auto; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; counter-increment: s; }
+.steps li::before { content: counter(s); font: 600 15px/26px var(--head); text-align: center; width: 28px; height: 28px; border: 1px solid var(--brand); color: var(--sky); border-radius: 50%; }
+.steps h3, .uses h3 { margin: 0 0 2px; font: 600 17px var(--head); }
+.steps p, .uses p { margin: 0; color: var(--muted); max-width: 62ch; }
+.uses { display: grid; gap: 1px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.use { background: var(--panel); padding: 20px; display: grid; gap: 6px; align-content: start; }
+.use .tag { font-size: 13px; font-weight: 600; color: var(--brand-2); }
+.use button.link { justify-self: start; margin-top: 6px; background: none; border: 0; padding: 0; color: var(--sky); cursor: pointer; font-size: 14px; font-weight: 600; }
+.use button.link:hover { text-decoration: underline; }
+.params { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 560px; }
+.params th, .params td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.params th { font-size: 13px; font-weight: 600; color: var(--muted); }
+.params td:first-child { font-weight: 600; white-space: nowrap; }
+.params td:last-child { color: var(--muted); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.yes { color: var(--brand-2); font-weight: 600; }
+footer { position: relative; padding-block: 56px 40px; color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
+footer p { margin: 0; max-width: 80ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="gate">
+  <div class="hexfield" aria-hidden="true"><svg viewBox="0 0 600 600" preserveAspectRatio="xMaxYMax slice">
+  <defs>
+    <pattern id="g-hex" width="52" height="90" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)">
+      <path d="M26.0 7.0 L45.9 18.5 L45.9 41.5 L26.0 53.0 L6.1 41.5 L6.1 18.5 Z M0.0 52.0 L19.9 63.5 L19.9 86.5 L0.0 98.0 L-19.9 86.5 L-19.9 63.5 Z M52.0 52.0 L71.9 63.5 L71.9 86.5 L52.0 98.0 L32.1 86.5 L32.1 63.5 Z M0.0 -38.0 L19.9 -26.5 L19.9 -3.5 L0.0 8.0 L-19.9 -3.5 L-19.9 -26.5 Z M52.0 -38.0 L71.9 -26.5 L71.9 -3.5 L52.0 8.0 L32.1 -3.5 L32.1 -26.5 Z M26.0 97.0 L45.9 108.5 L45.9 131.5 L26.0 143.0 L6.1 131.5 L6.1 108.5 Z" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="2.5"/>
+    </pattern>
+    <linearGradient id="g-ray" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#0095db"/><stop offset="1" stop-color="#00eaa9"/>
+    </linearGradient>
+  </defs>
+  <path d="M60 600 L600 60 L600 600 Z" fill="url(#g-hex)"/>
+</svg></div>
+  <form class="gate-card" id="gate-form" autocomplete="off">
+    <img class="gate-logo" src="__LOGO__" alt="VIOSO">
+    <div class="eyebrow" data-t="for">Exaplay 3 für AIRBUS · Michael Lüdtke</div>
+    <h1>Cloud Flight</h1>
+    <p data-t="gate.lead">Vertrauliche Präsentation. Bitte Passwort eingeben.</p>
+    <label for="pw" data-t="gate.label">Passwort</label>
+    <div class="gate-row">
+      <input id="pw" type="password" autofocus>
+      <button class="btn primary" type="submit" data-t="gate.go">Öffnen</button>
+    </div>
+    <div id="gate-err" role="alert"></div>
+  </form>
+</div>
+
+<main id="app" hidden>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand"><img src="__LOGO__" alt="VIOSO"><span><b>Exaplay 3</b> · Realtime Generator</span></div>
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" data-lang="de" aria-pressed="true">DE</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+    </header>
+
+    <div class="hero">
+    <div class="hero-text">
+      <div class="eyebrow" data-t="for">Exaplay 3 für AIRBUS · Michael Lüdtke</div>
+      <h1>Cloud Flight</h1>
+      <p data-t="hero.lead">Cloud Flight ist ein Echtzeit-Generator in Exaplay 3, der Playback- und Medienserver-Software von VIOSO. Ein Flug über die Wolkendecke, berechnet live auf der Grafikkarte: kein Video und keine Schleife, jedes Bild entsteht neu. In Exaplay lassen sich Tageszeit, Wolkentyp, Flughöhe und Blickrichtung live steuern oder an Daten koppeln.</p>
+    </div>
+
+    </div>
+
+    <div class="deck">
+      <div class="view" id="view">
+        <canvas id="cv"></canvas>
+        <div id="gl-err" hidden data-t="glerr">WebGL ist in diesem Browser nicht verfügbar.</div>
+        <div class="hud">
+          <div class="hud-data">
+            <span class="chip"><i data-t="hud.time">Zeit</i><span id="h-time">–</span></span>
+            <span class="chip"><i data-t="hud.type">Typ</i><span id="h-type">–</span></span>
+            <span class="chip"><i>FPS</i><span id="h-fps">–</span></span>
+            <span class="chip"><i>RES</i><span id="h-res">–</span></span>
+          </div>
+          <div class="hud-btns">
+            <button type="button" id="b-pause" data-t="hud.pause">Pause</button>
+            <button type="button" id="b-full" data-t="hud.full">Vollbild</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="panel" aria-label="Steuerung">
+        <div class="group">
+          <h2 data-t="p.scenes">Szenen</h2>
+          <div class="scenes" id="scenes"></div>
+        </div>
+
+        <div class="group">
+          <h2 data-t="p.view">Ansicht</h2>
+          <div class="seg" id="seg-view">
+            <button type="button" data-v="0" data-t="v.0">Cockpit</button>
+            <button type="button" data-v="1" data-t="v.1">Seite</button>
+            <button type="button" data-v="2" data-t="v.2">Kabine</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2 data-t="p.light">Licht &amp; Wetter</h2>
+          <div class="field">
+            <label for="s-daylight" data-t="f.daylight">Tageslicht</label>
+            <select id="s-daylight"></select>
+          </div>
+          <div class="field">
+            <label for="r-tod"><span data-t="f.tod">Uhrzeit</span><output id="o-tod"></output></label>
+            <input type="range" id="r-tod" min="0" max="24" step="0.05">
+          </div>
+          <div class="field">
+            <label for="s-ctype" data-t="f.ctype">Wolkentyp</label>
+            <select id="s-ctype"></select>
+          </div>
+          <div class="row2" id="sliders"></div>
+          <button type="button" class="btn flash-btn" id="b-flash" data-t="f.flash">Blitz auslösen</button>
+        </div>
+      </aside>
+    </div>
+
+    <div class="facts" id="facts"></div>
+
+    <section class="block" id="how">
+      <h2 data-t="how.h">So entsteht das Bild</h2>
+      <p class="intro" data-t="how.intro">Für jeden Bildpunkt und jedes Bild durchläuft der Shader dieselbe Kette. Alles geschieht im Fragment-Shader der Grafikkarte, ohne vorberechnete Daten außer einem Satellitenbild für den Boden.</p>
+      <div class="how">
+        <div class="diagram">
+          <svg viewBox="0 0 560 330" role="img" aria-labelledby="dg-t">
+            <title id="dg-t">Seitenansicht: Sichtstrahl durch die Wolkenschicht</title>
+            <defs>
+              <linearGradient id="dg-sky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#262626"/><stop offset="1" stop-color="#262626"/>
+              </linearGradient>
+              <marker id="dg-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="#2fb0ef"/>
+              </marker>
+              <marker id="dg-arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="#00eaa9"/>
+              </marker>
+            </defs>
+            <rect x="0" y="0" width="560" height="330" fill="url(#dg-sky)"/>
+            <!-- cloud slab 0 < y < top -->
+            <rect x="0" y="150" width="560" height="80" fill="#ffffff" fill-opacity=".07"/>
+            <line x1="0" y1="150" x2="560" y2="150" stroke="#b8b8b8" stroke-dasharray="4 4" stroke-opacity=".6"/>
+            <line x1="0" y1="230" x2="560" y2="230" stroke="#b8b8b8" stroke-dasharray="4 4" stroke-opacity=".6"/>
+            <path d="M120 230 C120 200 140 178 165 182 C175 160 210 158 222 178 C240 168 262 182 258 205 C270 208 272 230 272 230 Z" fill="#ffffff" fill-opacity=".85"/>
+            <path d="M330 230 C330 212 345 196 365 200 C372 184 398 182 408 198 C425 192 440 208 436 230 Z" fill="#ffffff" fill-opacity=".7"/>
+            <!-- ground -->
+            <rect x="0" y="290" width="560" height="40" fill="#34392c"/>
+            
+            <g fill="#f4b860"><circle cx="452" cy="300" r="2"/><circle cx="466" cy="306" r="2"/><circle cx="480" cy="299" r="2"/><circle cx="500" cy="309" r="2"/></g>
+            <!-- sun -->
+            <circle cx="520" cy="40" r="16" fill="#f4b860"/>
+            <!-- camera -->
+            <g transform="translate(30 92)"><path d="M0 0 L26 -8 L26 8 Z" fill="#2fb0ef"/></g>
+            <!-- view ray -->
+            <line x1="56" y1="92" x2="300" y2="282" stroke="#2fb0ef" stroke-width="2" marker-end="url(#dg-arr)"/>
+            <!-- samples: long steps in air, short near cloud -->
+            <g fill="#2fb0ef">
+              <circle cx="132" cy="151" r="3.5"/><circle cx="160" cy="173" r="3.5"/><circle cx="174" cy="184" r="3.5"/>
+              <circle cx="188" cy="195" r="3.5"/><circle cx="202" cy="206" r="3.5"/><circle cx="216" cy="217" r="3.5"/>
+              <circle cx="246" cy="240" r="3"/>
+            </g>
+            <!-- shadow probes toward the sun -->
+            <g stroke="#00eaa9" stroke-width="1.5" stroke-dasharray="3 3">
+              <line x1="174" y1="184" x2="214" y2="152" marker-end="url(#dg-arr2)"/>
+              <line x1="202" y1="206" x2="242" y2="174" marker-end="url(#dg-arr2)"/>
+            </g>
+            <g font-family="Quicksand, system-ui, sans-serif" font-size="12" font-weight="600" fill="#ffffff">
+              <text x="12" y="80" fill="#2fb0ef" data-svg="cam">Kamera</text>
+              <text x="330" y="144" fill="#b8b8b8" data-svg="slab">Wolkenschicht (3D-Rauschen)</text>
+              <text x="250" y="126" fill="#00eaa9" data-svg="shadow">Probe zur Sonne</text>
+              <text x="306" y="272" fill="#2fb0ef" data-svg="ray">Sichtstrahl</text>
+              <text x="12" y="318" fill="#ffffff" data-svg="ground">Boden: Landsat 9</text>
+              <text x="410" y="285" fill="#f4b860" data-svg="city">Stadtlichter</text>
+              <text x="470" y="72" fill="#f4b860" data-svg="sun">Sonne / Mond</text>
+            </g>
+          </svg>
+        </div>
+        <ol class="steps" id="steps"></ol>
+      </div>
+    </section>
+
+    <section class="block" id="use">
+      <h2 data-t="use.h">Einsatz in Kabine und Präsentation</h2>
+      <p class="intro" data-t="use.intro">In Exaplay ist der Generator ein Clip wie jedes Video: Er liegt auf Timeline oder Cueliste, wird auf beliebige Ausgänge gemappt und läuft über mehrere Rechner und Projektoren. Weil das Bild berechnet und nicht abgespielt wird, passt es sich jedem Format an und läuft beliebig lange ohne sichtbare Wiederholung. Die Schaltflächen zeigen jeweils ein Beispiel oben im Live-Bild.</p>
+      <div class="uses" id="uses"></div>
+    </section>
+
+    <section class="block" id="params">
+      <h2 data-t="par.h">Steuerbare Parameter</h2>
+      <p class="intro" data-t="par.intro">Parameter mit „Bindbar“ lassen sich in Exaplay an eine Variable koppeln, etwa an einen Wert, der per OSC, Art-Net oder Data Track hereinkommt, oder an den Audiopegel.</p>
+      <div class="table-wrap">
+        <table class="params">
+          <thead><tr><th data-t="par.c1">Parameter</th><th data-t="par.c2">Bereich</th><th data-t="par.c3">Bindbar</th><th data-t="par.c4">Wirkung</th></tr></thead>
+          <tbody id="ptable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      <img src="__LOGO__" alt="VIOSO" style="height:22px;width:auto;display:block;margin-bottom:8px">
+      <p data-t="foot.1">Diese Seite rechnet den Shader live auf Ihrem Gerät mit WebGL. Die Auflösung passt sich automatisch an die Leistung an; in Exaplay läuft derselbe Shader in voller Ausgabeauflösung.</p>
+      <p>© VIOSO GmbH · Exaplay 3</p>
+      <p data-t="foot.2">Bodenbild: Landsat 9, Ackerland in Südpolen. NASA Earth Observatory / USGS, gemeinfrei.</p>
+    </footer>
+  </div>
+</main>
+
+<script id="frag" type="x-shader/x-fragment">__FRAG__</script>
+<script>
+(() => {
+"use strict";
+const GROUND = "data:image/jpeg;base64,__GROUND__";
+const PW_HASHES = [
+  "09f07b04695ac814d8a75ba32e79b628735098eaebbce2d935ffc243179b6725",
+  "55cfca79983d25a9712ca3c0265182e68190400c0229712086b5e64cf11b2662",
+];
+
+// ── text ────────────────────────────────────────────
+const T = {
+  de: {
+    "gate.lead": "Vertrauliche Präsentation. Bitte Passwort eingeben.",
+    "gate.label": "Passwort", "gate.go": "Öffnen", "gate.err": "Das Passwort stimmt nicht. Bitte erneut versuchen.",
+    "gate.nocrypto": "Dieser Browser kann das Passwort nicht prüfen. Bitte einen aktuellen Browser verwenden.",
+    "for": "Exaplay 3 für AIRBUS · Michael Lüdtke",
+    "hero.lead": "Cloud Flight ist ein Echtzeit-Generator in Exaplay 3, der Playback- und Medienserver-Software von VIOSO. Ein Flug über die Wolkendecke, berechnet live auf der Grafikkarte: kein Video und keine Schleife, jedes Bild entsteht neu. In Exaplay lassen sich Tageszeit, Wolkentyp, Flughöhe und Blickrichtung live steuern oder an Daten koppeln.",
+    "glerr": "WebGL ist in diesem Browser nicht verfügbar.",
+    "hud.time": "Zeit", "hud.type": "Typ", "hud.pause": "Pause", "hud.play": "Weiter", "hud.full": "Vollbild",
+    "p.scenes": "Szenen", "p.view": "Ansicht", "p.light": "Licht & Wetter",
+    "v.0": "Cockpit", "v.1": "Seite", "v.2": "Kabine",
+    "f.daylight": "Tageslicht", "f.tod": "Uhrzeit", "f.ctype": "Wolkentyp", "f.flash": "Blitz auslösen",
+    "f.altitude": "Flughöhe", "f.cover": "Bedeckung", "f.holes": "Wolkenlücken", "f.speed": "Geschwindigkeit",
+    "f.rays": "Lichtstrahlen", "f.city": "Stadtlichter", "f.lightning": "Gewitter", "f.sun": "Sonnenrichtung",
+    "daylight": ["Morgendämmerung", "Vormittag", "Mittag", "Goldene Stunde", "Sonnenuntergang", "Blaue Stunde", "Mondnacht", "Nach Uhrzeit (24 h)"],
+    "ctype": ["Cumulus", "Wolkenmeer", "Aufgetürmte Cumulus", "Stratus / Nebelmeer", "Altocumulus", "Wolkenstraßen", "Reiseflughöhe"],
+    "scenes": {
+      cruise: ["Reiseflug", "Seitenfenster, Mittag"],
+      golden: ["Kabinenfenster", "Goldene Stunde"],
+      night: ["Nachtflug", "Städte durch Lücken"],
+      storm: ["Gewitter voraus", "Blaue Stunde, Blitze"],
+      dawn: ["Nebelmeer", "Sonnenaufgang, Strahlen"],
+      day24: ["24 h im Zeitraffer", "ein Tag in 40 s"],
+    },
+    "facts": [["7", "Wolkentypen"], ["24 h", "stufenloser Tageslauf"], ["3", "Blickwinkel: Cockpit, Seite, Kabinenfenster"], ["96", "Messpunkte je Pixel und Bild, maximal"], ["0", "Videodateien"]],
+    "how.h": "So entsteht das Bild",
+    "how.intro": "Für jeden Bildpunkt und jedes Bild durchläuft der Shader dieselbe Kette. Alles geschieht im Fragment-Shader der Grafikkarte, ohne vorberechnete Daten außer einem Satellitenbild für den Boden.",
+    "steps": [
+      ["Sichtstrahl", "Von der Kamera geht für jeden Bildpunkt ein Strahl in die Szene. Ansicht, Flughöhe und ein leichtes Rollen des Flugzeugs legen fest, wohin er zeigt."],
+      ["Wolkenschicht abtasten", "Der Strahl durchquert eine Schicht aus dreidimensionalem Rauschen. In klarer Luft macht er lange Schritte, kurz vor einer Wolke kurze, so bleiben die Ränder scharf und flimmern nicht."],
+      ["Licht an jedem Punkt", "Eine Probe Richtung Sonne ergibt den Eigenschatten. Das Licht wird nach dem Beer-Lambert-Gesetz geschwächt, und Vorwärtsstreuung erzeugt den hellen Silberrand im Gegenlicht."],
+      ["Atmosphäre und Himmel", "Dunst lässt die Ferne in die Horizontfarbe übergehen. Darüber Sonne oder Mond, Sterne, hohe Zirren und auf Wunsch Lichtstrahlen, die durch die Lücken zwischen den Wolken fächern."],
+      ["Boden und Nacht", "Unter der Decke liegt ein Satellitenbild von Landsat 9. Nachts erkennt der Shader die Siedlungen im Bild an ihrer Farbe und setzt dort einzelne Lichtpunkte, die in der Ferne zu einem Schein verschmelzen."],
+    ],
+    "use.h": "Einsatz in Kabine und Präsentation",
+    "use.intro": "In Exaplay ist der Generator ein Clip wie jedes Video: Er liegt auf Timeline oder Cueliste, wird auf beliebige Ausgänge gemappt und läuft über mehrere Rechner und Projektoren. Weil das Bild berechnet und nicht abgespielt wird, passt es sich jedem Format an und läuft beliebig lange ohne sichtbare Wiederholung. Die Schaltflächen zeigen jeweils ein Beispiel oben im Live-Bild.",
+    "uses": [
+      ["Virtuelle Fenster", "Ausblick, wo es kein Fenster gibt", "Displays oder Projektion in fensterlosen Bereichen wie Crew-Rest, Lounges oder Kabinen-Mockups. Die Ansicht „Kabine“ bringt den Fensterrahmen gleich mit, die Wandfarbe folgt dem Tageslicht.", "golden"],
+      ["Showroom und Messe", "Ein Mockup, das fliegt", "Ein Kabinen-Mockup mit lebendigem Ausblick statt Standbild. Läuft stundenlang ohne Schleife und in jeder Auflösung, vom einzelnen Fenster-Display bis zur großen Projektion.", "cruise"],
+      ["Licht- und Tagesszenarien", "Ein ganzer Tag in einem Regler", "Der Modus „Nach Uhrzeit“ fährt stufenlos von Nacht über Dämmerung und Mittag bis Sonnenuntergang. So lässt sich der Ausblick an Kabinen-Lichtstimmungen oder an die Ortszeit am Ziel anpassen.", "day24"],
+      ["Datengetrieben", "Flugphase, Uhrzeit, Klang", "Uhrzeit, Flughöhe, Geschwindigkeit, Bedeckung und Gewitter sind bindbar. Ein Wert per OSC, Art-Net oder Data Track bewegt den Himmel, ein Audiopegel kann Blitze auslösen.", "storm"],
+      ["Viele Displays, ein Moment", "Synchron ohne Videoverteilung", "Das Bild hängt allein von der Clip-Zeit und den Parametern ab. Im Exaplay-Verbund zeigt jeder Rechner denselben Moment, auch dieselben Blitze, ohne dass Videodaten verteilt werden.", "night"],
+      ["Eigene Region", "Der Boden unter der Route", "Das Bodenbild ist austauschbar: ein Satelliten- oder Luftbild der eigenen Strecke, eines Werks oder einer Zielregion. Bei Nacht leuchten dort automatisch die Siedlungen.", "dawn"],
+    ],
+    "use.try": "Im Live-Bild zeigen ↑",
+    "par.h": "Steuerbare Parameter",
+    "par.intro": "Parameter mit „Bindbar“ lassen sich in Exaplay an eine Variable koppeln, etwa an einen Wert, der per OSC, Art-Net oder Data Track hereinkommt, oder an den Audiopegel.",
+    "par.c1": "Parameter", "par.c2": "Bereich", "par.c3": "Bindbar", "par.c4": "Wirkung", "par.yes": "ja",
+    "ptable": [
+      ["Tageslicht", "7 Stimmungen + Uhrzeit", "", "Sonnenstand, Farbe von Sonne, Himmel und Schatten"],
+      ["Uhrzeit", "0 – 24 h", "y", "Stufenloser Tageslauf inkl. Mond und Sternen"],
+      ["Wolkentyp", "7 Typen", "", "Form der Decke: Höhe, Größe und Streckung der Wolken"],
+      ["Ansicht", "Cockpit · Seite · Kabine", "", "Blickrichtung, Kabine mit Fensterrahmen"],
+      ["Flughöhe", "0 – 1", "y", "Durch die Wolken bis weit darüber"],
+      ["Bedeckung / Dichte", "0 – 1 / 0,1 – 3", "y", "Wie viel Himmel die Wolken einnehmen, wie dicht sie sind"],
+      ["Wolkenlücken", "0 – 1", "y", "Öffnungen, durch die der Boden sichtbar wird"],
+      ["Geschwindigkeit", "0 – 4 ×", "y", "Fluggeschwindigkeit über der Decke"],
+      ["Lichtstrahlen", "0 – 2", "y", "Strahlenfächer durch Wolkenlücken"],
+      ["Stadtlichter", "0 – 3", "y", "Lichtpunkte der Siedlungen bei Nacht"],
+      ["Gewitter / Blitz", "0 – 1", "y", "Automatische Blitze oder ein einzelner, von außen ausgelöster"],
+      ["Bodenbild", "beliebiges Bild", "", "Eigenes Satelliten- oder Luftbild unter der Decke"],
+    ],
+    "foot.1": "Diese Seite rechnet den Shader live auf Ihrem Gerät mit WebGL. Die Auflösung passt sich automatisch an die Leistung an; in Exaplay läuft derselbe Shader in voller Ausgabeauflösung.",
+    "foot.2": "Bodenbild: Landsat 9, Ackerland in Südpolen. NASA Earth Observatory / USGS, gemeinfrei.",
+    "svg": { cam: "Kamera", slab: "Wolkenschicht (3D-Rauschen)", shadow: "Probe zur Sonne", ray: "Sichtstrahl", ground: "Boden: Landsat 9", city: "Stadtlichter", sun: "Sonne / Mond" },
+  },
+  en: {
+    "gate.lead": "Confidential presentation. Please enter the password.",
+    "gate.label": "Password", "gate.go": "Open", "gate.err": "That password is not right. Please try again.",
+    "gate.nocrypto": "This browser cannot check the password. Please use a current browser.",
+    "for": "Exaplay 3 for AIRBUS · Michael Lüdtke",
+    "hero.lead": "Cloud Flight is a realtime generator in Exaplay 3, VIOSO's playback and media server software. A flight above the cloud deck, rendered live on the graphics card: no video and no loop, every frame is computed fresh. In Exaplay, time of day, cloud type, altitude and view can be steered live or driven by data.",
+    "glerr": "WebGL is not available in this browser.",
+    "hud.time": "Time", "hud.type": "Type", "hud.pause": "Pause", "hud.play": "Play", "hud.full": "Fullscreen",
+    "p.scenes": "Scenes", "p.view": "View", "p.light": "Light & weather",
+    "v.0": "Cockpit", "v.1": "Side", "v.2": "Cabin",
+    "f.daylight": "Daylight", "f.tod": "Time of day", "f.ctype": "Cloud type", "f.flash": "Trigger lightning",
+    "f.altitude": "Altitude", "f.cover": "Coverage", "f.holes": "Cloud gaps", "f.speed": "Airspeed",
+    "f.rays": "Light rays", "f.city": "City lights", "f.lightning": "Thunderstorm", "f.sun": "Sun direction",
+    "daylight": ["Dawn", "Morning", "Noon", "Golden hour", "Sunset", "Blue hour", "Moonlit night", "By time of day (24 h)"],
+    "ctype": ["Cumulus", "Sea of clouds", "Towering cumulus", "Stratus / fog sea", "Altocumulus", "Cloud streets", "High cruise"],
+    "scenes": {
+      cruise: ["Cruise", "Side window, noon"],
+      golden: ["Cabin window", "Golden hour"],
+      night: ["Night flight", "Cities through gaps"],
+      storm: ["Storm ahead", "Blue hour, lightning"],
+      dawn: ["Fog sea", "Sunrise, light rays"],
+      day24: ["24 h time-lapse", "one day in 40 s"],
+    },
+    "facts": [["7", "cloud types"], ["24 h", "continuous day cycle"], ["3", "views: cockpit, side, cabin window"], ["96", "samples per pixel per frame, at most"], ["0", "video files"]],
+    "how.h": "How the picture is made",
+    "how.intro": "For every pixel of every frame the shader runs the same chain. It all happens in the GPU's fragment shader, with no precomputed data apart from one satellite image for the ground.",
+    "steps": [
+      ["View ray", "A ray leaves the camera for every pixel. The view, the altitude and a gentle roll of the aircraft decide where it points."],
+      ["Sampling the cloud layer", "The ray crosses a layer of three-dimensional noise. In clear air it takes long steps, close to a cloud short ones, so edges stay sharp instead of shimmering."],
+      ["Light at every point", "A probe towards the sun gives the self-shadow. Light is absorbed following the Beer–Lambert law, and forward scattering produces the bright silver lining against the sun."],
+      ["Atmosphere and sky", "Haze fades the distance into the colour of the horizon. Above it the sun or moon, stars, high cirrus and, if wanted, light rays fanning through the gaps between the clouds."],
+      ["Ground and night", "Beneath the deck lies a Landsat 9 satellite image. At night the shader finds the settlements in that image by their colour and places individual lights there, which merge into a glow in the distance."],
+    ],
+    "use.h": "In the cabin and on stage",
+    "use.intro": "In Exaplay the generator is a clip like any video: it sits on the timeline or a cue list, is mapped to any outputs and runs across several machines and projectors. Because the picture is computed rather than played back, it fits any format and runs for as long as needed without a visible repeat. Each button shows an example in the live view above.",
+    "uses": [
+      ["Virtual windows", "A view where there is no window", "Displays or projection in windowless areas such as crew rest, lounges or cabin mock-ups. The Cabin view brings the window frame with it, and the wall follows the daylight.", "golden"],
+      ["Showroom and trade fair", "A mock-up that flies", "A cabin mock-up with a living view instead of a still. Runs for hours without a loop and at any resolution, from a single window display to a large projection.", "cruise"],
+      ["Light and time-of-day scenarios", "A whole day on one fader", "The By time of day mode moves continuously from night through dawn and noon to sunset, so the view can follow cabin lighting moods or the local time at the destination.", "day24"],
+      ["Data-driven", "Flight phase, clock, sound", "Time of day, altitude, airspeed, coverage and thunderstorm are bindable. A value arriving by OSC, Art-Net or a Data Track moves the sky, and an audio level can trigger lightning.", "storm"],
+      ["Many displays, one moment", "In sync without distributing video", "The picture depends only on clip time and parameters. Across an Exaplay cluster every machine shows the same moment, the same lightning included, with no video data to distribute.", "night"],
+      ["Your own region", "The ground below the route", "The ground image can be swapped: a satellite or aerial image of your own route, a plant or a destination region. At night its settlements light up automatically.", "dawn"],
+    ],
+    "use.try": "Show in the live view ↑",
+    "par.h": "Controllable parameters",
+    "par.intro": "Parameters marked bindable can be tied to a variable in Exaplay, such as a value arriving by OSC, Art-Net or a Data Track, or the audio level.",
+    "par.c1": "Parameter", "par.c2": "Range", "par.c3": "Bindable", "par.c4": "Effect", "par.yes": "yes",
+    "ptable": [
+      ["Daylight", "7 moods + time of day", "", "Sun position, colour of sun, sky and shadows"],
+      ["Time of day", "0 – 24 h", "y", "Continuous day cycle including moon and stars"],
+      ["Cloud type", "7 types", "", "Shape of the deck: height, size and stretch of the clouds"],
+      ["View", "Cockpit · Side · Cabin", "", "Viewing direction; Cabin adds the window frame"],
+      ["Altitude", "0 – 1", "y", "Through the clouds to far above them"],
+      ["Coverage / Density", "0 – 1 / 0.1 – 3", "y", "How much sky the clouds take, how dense they are"],
+      ["Cloud gaps", "0 – 1", "y", "Openings through which the ground shows"],
+      ["Airspeed", "0 – 4 ×", "y", "Speed of flight over the deck"],
+      ["Light rays", "0 – 2", "y", "Fans of light through gaps in the clouds"],
+      ["City lights", "0 – 3", "y", "Lights of settlements at night"],
+      ["Thunderstorm / Flash", "0 – 1", "y", "Automatic lightning, or a single strike triggered from outside"],
+      ["Ground image", "any image", "", "Your own satellite or aerial image under the deck"],
+    ],
+    "foot.1": "This page renders the shader live on your device with WebGL. Resolution adapts to performance automatically; in Exaplay the same shader runs at full output resolution.",
+    "foot.2": "Ground image: Landsat 9, farmland in southern Poland. NASA Earth Observatory / USGS, public domain.",
+    "svg": { cam: "Camera", slab: "Cloud layer (3-D noise)", shadow: "Probe to the sun", ray: "View ray", ground: "Ground: Landsat 9", city: "City lights", sun: "Sun / moon" },
+  },
+};
+let lang = "de";
+try { const l = localStorage.getItem("cf-lang"); if (l === "en" || l === "de") lang = l; } catch (e) {}
+
+// ── state (the generator's own defaults) ─────────────
+const P = {
+  daylight: 3, tod: 18.5, ctype: 0, view: 0, speed: 1, bright: 1, altitude: 0.45, cover: 0.55,
+  density: 1, holes: 0, holesize: 1, puff: 1, sun: 0.06, haze: 1, rays: 0.6, city: 1,
+  lightning: 0, flash: 0, bank: 1, quality: 56, groundscale: 30,
+};
+const BASE = { ...P };
+const SLIDERS = [
+  ["altitude", 0, 1, 0.01], ["cover", 0, 1, 0.01], ["holes", 0, 1, 0.01], ["speed", 0, 4, 0.01],
+  ["rays", 0, 2, 0.02], ["city", 0, 3, 0.02], ["lightning", 0, 1, 0.01], ["sun", 0, 1, 0.005],
+];
+const SCENES = {
+  cruise: { daylight: 2, ctype: 6, view: 1, altitude: 0.8, cover: 0.55, rays: 0.6, sun: 0.06 },
+  golden: { daylight: 3, ctype: 0, view: 2, altitude: 0.45, cover: 0.55, rays: 0.9, sun: 0.12 },
+  night: { daylight: 6, ctype: 1, view: 1, altitude: 0.6, cover: 0.45, holes: 0.7, city: 2.2, speed: 1.3, sun: 0.3 },
+  storm: { daylight: 5, ctype: 2, view: 0, altitude: 0.35, cover: 0.6, lightning: 0.55, speed: 1.4, city: 1.5 },
+  dawn: { daylight: 0, ctype: 3, view: 0, altitude: 0.55, cover: 0.6, holes: 0.25, rays: 1.4, sun: 0.02 },
+  day24: { daylight: 7, tod: 4.5, ctype: 0, view: 2, altitude: 0.5, cover: 0.5, holes: 0.45, city: 1.8, rays: 0.8 },
+};
+let scene = "cruise";
+let timelapse = false;
+
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+// ── UI build ─────────────────────────────────────────
+function buildUI() {
+  const t = T[lang];
+  document.documentElement.lang = lang;
+  $$("[data-t]").forEach((el) => { const v = t[el.dataset.t]; if (typeof v === "string") el.textContent = v; });
+  $$("[data-svg]").forEach((el) => { el.textContent = t.svg[el.dataset.svg]; });
+  $$(".lang button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+
+  const dl = $("#s-daylight"); dl.innerHTML = "";
+  t.daylight.forEach((n, i) => dl.add(new Option(n, i)));
+  const ct = $("#s-ctype"); ct.innerHTML = "";
+  t.ctype.forEach((n, i) => ct.add(new Option(n, i)));
+
+  const sc = $("#scenes"); sc.innerHTML = "";
+  Object.keys(SCENES).forEach((k) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "scene"; b.dataset.scene = k;
+    b.innerHTML = `${t.scenes[k][0]}<small>${t.scenes[k][1]}</small>`;
+    b.addEventListener("click", () => applyScene(k));
+    sc.appendChild(b);
+  });
+
+  const sl = $("#sliders"); sl.innerHTML = "";
+  SLIDERS.forEach(([k, mn, mx, st]) => {
+    const f = document.createElement("div"); f.className = "field";
+    f.innerHTML = `<label for="r-${k}"><span>${t["f." + k]}</span><output id="o-${k}"></output></label>
+      <input type="range" id="r-${k}" min="${mn}" max="${mx}" step="${st}">`;
+    sl.appendChild(f);
+    f.querySelector("input").addEventListener("input", (e) => { P[k] = +e.target.value; manual(); syncUI(); });
+  });
+
+  $("#facts").innerHTML = t.facts.map(([b, s]) => `<div class="fact"><b>${b}</b><span>${s}</span></div>`).join("");
+  $("#steps").innerHTML = t.steps.map(([h, p]) => `<li><div><h3>${h}</h3><p>${p}</p></div></li>`).join("");
+  $("#uses").innerHTML = t.uses.map(([h, tag, p, s]) =>
+    `<div class="use"><div class="tag">${tag}</div><h3>${h}</h3><p>${p}</p><button type="button" class="link" data-go="${s}">${t["use.try"]}</button></div>`).join("");
+  $$("#uses [data-go]").forEach((b) => b.addEventListener("click", () => {
+    applyScene(b.dataset.go);
+    $("#view").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+  }));
+  $("#ptable").innerHTML = t.ptable.map(([a, b, c, d]) =>
+    `<tr><td>${a}</td><td>${b}</td><td>${c ? `<span class="yes">${t["par.yes"]}</span>` : "–"}</td><td>${d}</td></tr>`).join("");
+  syncUI();
+}
+
+function fmtH(h) { h = ((h % 24) + 24) % 24; const m = Math.floor((h % 1) * 60); return `${String(Math.floor(h)).padStart(2, "0")}:${String(m).padStart(2, "0")}`; }
+
+function syncUI() {
+  const t = T[lang];
+  $("#s-daylight").value = P.daylight;
+  $("#s-ctype").value = P.ctype;
+  const byTime = P.daylight === 7;
+  const tod = $("#r-tod"); tod.value = P.tod; tod.disabled = !byTime;
+  $("#o-tod").textContent = byTime ? fmtH(P.tod) : "–";
+  SLIDERS.forEach(([k]) => {
+    const r = $("#r-" + k); if (!r) return;
+    r.value = P[k];
+    $("#o-" + k).textContent = k === "speed" ? P[k].toFixed(2) + "×" : P[k].toFixed(2);
+  });
+  $$("#seg-view button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.v === P.view)));
+  $$("#scenes .scene").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.scene === scene)));
+  $("#h-time").textContent = byTime ? fmtH(P.tod) : t.daylight[P.daylight];
+  $("#h-type").textContent = t.ctype[P.ctype];
+  $("#b-pause").textContent = paused ? t["hud.play"] : t["hud.pause"];
+}
+
+function applyScene(k) {
+  Object.assign(P, BASE, SCENES[k]);
+  scene = k; timelapse = k === "day24";
+  syncUI();
+}
+function manual() { scene = null; timelapse = false; }
+
+function wireStatic() {
+  $$(".lang button").forEach((b) => b.addEventListener("click", () => {
+    lang = b.dataset.lang; try { localStorage.setItem("cf-lang", lang); } catch (e) {}
+    buildUI();
+  }));
+  $("#s-daylight").addEventListener("change", (e) => { P.daylight = +e.target.value; manual(); syncUI(); });
+  $("#s-ctype").addEventListener("change", (e) => { P.ctype = +e.target.value; manual(); syncUI(); });
+  $("#r-tod").addEventListener("input", (e) => { P.tod = +e.target.value; manual(); syncUI(); });
+  $$("#seg-view button").forEach((b) => b.addEventListener("click", () => { P.view = +b.dataset.v; manual(); syncUI(); }));
+  $("#b-flash").addEventListener("click", () => { flashT = 0; });
+  $("#b-pause").addEventListener("click", () => { paused = !paused; syncUI(); });
+  $("#b-full").addEventListener("click", () => {
+    const v = $("#view");
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else { const r = v.requestFullscreen && v.requestFullscreen(); if (r && r.catch) r.catch(() => {}); }
+    } catch (e) {}
+  });
+}
+
+// ── WebGL ────────────────────────────────────────────
+let gl, prog, U = {}, paused = false, flashT = 99, visible = true;
+let simT = 8, scale = 0.6;
+const cv = document.getElementById("cv");
+
+function initGL() {
+  gl = cv.getContext("webgl", { antialias: false, alpha: false, preserveDrawingBuffer: false, powerPreference: "high-performance" });
+  if (!gl) { $("#gl-err").hidden = false; return false; }
+  const vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, "attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }");
+  gl.compileShader(vs);
+  const fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, document.getElementById("frag").textContent);
+  gl.compileShader(fs);
+  if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(fs)); $("#gl-err").hidden = false; return false;
+  }
+  prog = gl.createProgram();
+  gl.attachShader(prog, vs); gl.attachShader(prog, fs);
+  gl.bindAttribLocation(prog, 0, "p");
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); $("#gl-err").hidden = false; return false; }
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  ["u_time", "u_resolution", "u_ground", "u_ground_set", ...Object.keys(P).map((k) => "u_" + k), "u_tod"]
+    .forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
+  gl.uniform1f(U.u_ground_set, 0);
+  gl.uniform1i(U.u_ground, 0);
+  const tex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([60, 70, 50]));
+  [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach((w) => gl.texParameteri(gl.TEXTURE_2D, w, gl.CLAMP_TO_EDGE));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  const img = new Image();
+  img.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+    gl.uniform1f(U.u_ground_set, 1);
+  };
+  img.src = GROUND;
+  return true;
+}
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(160, Math.round(r.width * dpr * scale));
+  const h = Math.max(90, Math.round(r.height * dpr * scale));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; $("#h-res").textContent = `${w}×${h}`; }
+}
+
+let last = 0, acc = 0, frames = 0, fpsT = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!visible || document.hidden) { last = now; return; }
+  const dt = last ? Math.min((now - last) / 1000, 0.1) : 0;
+  last = now;
+  // adapt resolution to keep the view fluid
+  acc += dt; frames++;
+  if (acc >= 0.75) {
+    const fps = frames / acc;
+    $("#h-fps").textContent = fps.toFixed(0);
+    if (fps < 26 && scale > 0.25) scale = Math.max(0.25, scale * 0.85);
+    else if (fps > 50 && scale < 1) scale = Math.min(1, scale * 1.08);
+    acc = 0; frames = 0;
+  }
+  if (!paused) {
+    simT += dt;
+    if (timelapse) { P.tod = (P.tod + dt * 0.6) % 24; fpsT += dt; if (fpsT > 0.25) { fpsT = 0; syncUI(); } }
+  }
+  flashT += dt;
+  P.flash = flashT < 1 ? Math.max(0, 1 - flashT / 0.6) * (flashT < 0.08 || flashT > 0.14 ? 1 : 0.4) : 0;
+  resize();
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.uniform1f(U.u_time, simT);
+  gl.uniform2f(U.u_resolution, cv.width, cv.height);
+  for (const k in P) if (U["u_" + k]) gl.uniform1f(U["u_" + k], P[k]);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+function start() {
+  $("#gate").hidden = true;
+  $("#app").hidden = false;
+  buildUI();
+  wireStatic();
+  applyScene(scene);
+  if (!initGL()) return;
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver((es) => { visible = es[0].isIntersecting; }).observe($("#view"));
+  }
+  requestAnimationFrame(frame);
+}
+
+// ── gate ─────────────────────────────────────────────
+function gateText() {
+  const t = T[lang];
+  $$("#gate [data-t]").forEach((el) => { el.textContent = t[el.dataset.t]; });
+}
+async function sha(s) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+gateText();
+let ok = false;
+try { ok = sessionStorage.getItem("cf-ok") === "1"; } catch (e) {}
+if (ok) start();
+$("#gate-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("#gate-err");
+  if (!(window.crypto && crypto.subtle)) { err.textContent = T[lang]["gate.nocrypto"]; return; }
+  const v = $("#pw").value.toLowerCase().replace(/\s+/g, "");
+  if (PW_HASHES.includes(await sha(v))) {
+    try { sessionStorage.setItem("cf-ok", "1"); } catch (e2) {}
+    start();
+  } else {
+    err.textContent = T[lang]["gate.err"];
+    $("#pw").select();
+  }
+});
+})();
+</script>

@@ -1,0 +1,22 @@
+landsat_farmland_poland.jpg
+===========================
+
+"Farming on the Straight, Curved, and Narrow" — the ribbon-like fields around
+Sułoszowa, southern Poland, acquired by the OLI-2 on Landsat 9 on
+August 13, 2024 (natural colour).
+NASA Earth Observatory image by Lauren Dauphin, using Landsat data from the
+U.S. Geological Survey.
+https://science.nasa.gov/earth/earth-observatory/farming-on-the-straight-curved-and-narrow-154057/
+
+Licence: public domain. Landsat data is a work of the U.S. Government, and
+NASA Earth Observatory images are free to re-publish and re-use, including
+for commercial purposes, except where a copyright is indicated (none is for
+this image). The only mandatory credit is NASA; the full credit line is given
+here anyway so the source stays traceable.
+
+Modified: a 1000 x 1000 px square cropped from the top of the 1152 x 1280
+original (clear of a quarry at its left edge and the city at its foot) and
+resized to 1024 x 1024 — a power of two, so a WebGL1 preview can tile it.
+
+Used by the Cloud Flight generator as its default ground image
+($[generator_assets]/cloud-flight/landsat_farmland_poland.jpg).
