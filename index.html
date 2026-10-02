@@ -230,7 +230,11 @@ footer p { margin: 0; max-width: 80ch; }
           <div class="seg" id="seg-view">
             <button type="button" data-v="0" data-t="v.0">Cockpit</button>
             <button type="button" data-v="1" data-t="v.1">Seite</button>
-            <button type="button" data-v="2" data-t="v.2">Kabine</button>
+            <button type="button" data-v="2" data-t="v.2">A320</button>
+          </div>
+          <div class="field">
+            <label for="r-shade"><span data-t="f.shade">Sonnenblende</span><output id="o-shade"></output></label>
+            <input type="range" id="r-shade" min="0" max="1" step="0.01">
           </div>
         </div>
 
@@ -420,6 +424,7 @@ uniform float u_rays;      // Light rays: sunlight scattered in the clear air
 uniform float u_city;      // City lights at night
 uniform float u_lightning; // automatic lightning, strikes per time
 uniform float u_flash;     // a flash held by hand / a binding (0..1)
+uniform float u_shade;     // Cabin window: how far its shade is pulled down (0 open .. 1 closed)
 uniform sampler2D u_ground;
 uniform float u_ground_set;
 uniform float u_groundscale;
@@ -619,6 +624,21 @@ float cfRoundBox(vec2 p, vec2 b, float r){
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 
+// The cabin window, A320 style. Three nested rounded rectangles in picture
+// units (the picture is 1 tall): the PANE (the outside world), the TRACK the
+// shade runs in, a little wider than the pane, and the LINER — the opening
+// of the white window bezel in the cabin wall, much larger, so the wall
+// slopes in towards the pane as a deep, light-catching reveal. The pane has
+// the proportions of the A320's opening in the skin, 9 1/4 x 13 3/16 in
+// (1 : 1.43; a 737's is 10 1/4 x 14 3/8), slightly oval: strongly rounded
+// corners. The liner and track are drawn after photographs of the cabin.
+const vec2  CF_PANE = vec2(0.2, 0.285);
+const float CF_PANE_R = 0.13;
+const vec2  CF_TRACK = vec2(0.227, 0.318);
+const float CF_TRACK_R = 0.15;
+const vec2  CF_LINER = vec2(0.315, 0.415);
+const float CF_LINER_R = 0.21;
+
 void main(){
   vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
   float t = u_time;
@@ -642,17 +662,55 @@ void main(){
   vec3 cityCol = vec3(1.0, 0.62, 0.3);
   vec3 flashCol = vec3(0.78, 0.82, 1.0);
 
-  // the cabin window: an oval opening in the wall panel
+  // the cabin window (A320): the shade, the bezel's reveal and the wall are
+  // drawn here and return; only the pane goes on to the sky
   bool framed = u_view > 1.5;
   float win = 0.0;
   if(framed){
-    win = cfRoundBox(uv, vec2(0.25, 0.36), 0.2);
-    if(win > 0.045){
-      float lum = dot(amb + sun * max(el, 0.0) * 0.4, vec3(0.33));
-      vec3 wall = vec3(0.86, 0.84, 0.80) * (0.18 + 0.7 * clamp(lum, 0.0, 1.2));
-      wall *= 0.85 + 0.15 * smoothstep(-0.6, 0.6, uv.y);
-      wall *= 1.0 - 0.5 * exp(-(win - 0.045) * 40.0);   // the reveal's shadow
-      gl_FragColor = vec4(clamp(wall * u_bright, 0.0, 1.0), 1.0);
+    win = cfRoundBox(uv, CF_PANE, CF_PANE_R);
+    float liner = cfRoundBox(uv, CF_LINER, CF_LINER_R);
+    float track = cfRoundBox(uv, CF_TRACK, CF_TRACK_R);
+    // the cabin's light on the wall, and the daylight coming IN through
+    // the window (what lights the reveal and glows through the shade)
+    float lum = clamp(dot(amb + sun * max(el, 0.0) * 0.4, vec3(0.33)), 0.0, 1.2);
+    vec3 inLight = sun * max(el + 0.05, 0.0) * 0.35 + amb * 0.45;
+    vec3 plastic = vec3(0.90, 0.89, 0.86);
+    // The shade: pulled down from the top of its track by u_shade, a
+    // moulded panel with a lip and a finger tab at its lower edge. It is
+    // lit from the cabin and glows faintly with the daylight behind it.
+    float shade = clamp(u_shade, 0.0, 1.0);
+    float edgeY = CF_TRACK.y - shade * 2.0 * CF_TRACK.y;
+    float tab = step(abs(uv.x), 0.032) * step(edgeY - 0.016, uv.y);
+    if(shade > 0.001 && track < 0.0 && (uv.y > edgeY || tab > 0.5)){
+      float e = uv.y - edgeY;
+      vec3 sc = plastic * (0.16 + 0.62 * lum) + inLight * 0.22;
+      sc *= 0.985 + 0.015 * sin(uv.y * 180.0);                   // a faint moulded grain
+      sc *= 0.72 + 0.28 * smoothstep(0.0, 0.014, e);             // the lip's underside
+      sc += plastic * 0.10 * (1.0 - smoothstep(0.0, 0.004, abs(e - 0.016)));  // its top edge
+      sc *= 0.8 + 0.2 * smoothstep(0.0, 0.012, 0.0 - track);     // shadow of the track
+      gl_FragColor = vec4(clamp(sc * u_bright, 0.0, 1.0), 1.0);
+      return;
+    }
+    if(win > 0.0){
+      vec3 c;
+      if(liner < 0.0){
+        // the reveal: 0 at the pane, 1 at the bezel's rim. Lit by the
+        // window, brightest close to the pane and on the sill below it,
+        // in shadow under the top; a dark rubber seal round the pane.
+        float k = clamp(win / max(win - liner, 1e-3), 0.0, 1.0);
+        float lit = 0.62 + 0.38 * (1.0 - k);
+        lit *= 1.0 + 0.22 * (1.0 - smoothstep(-0.3, 0.0, uv.y));
+        lit *= 1.0 - 0.3 * smoothstep(0.0, 0.32, uv.y) * (1.0 - k);
+        c = plastic * (0.16 + 0.6 * lum) * lit + inLight * 0.3 * (1.0 - k);
+        c *= 0.35 + 0.65 * smoothstep(0.0, 0.009, win);           // the seal
+        c *= 1.0 + 0.12 * (1.0 - smoothstep(0.0, 0.01, 0.0 - liner));  // the rim's highlight
+      } else {
+        // the wall panel round the bezel, the bezel casting a soft shadow
+        c = vec3(0.86, 0.84, 0.80) * (0.18 + 0.7 * lum);
+        c *= 0.85 + 0.15 * smoothstep(-0.6, 0.6, uv.y);
+        c *= 1.0 - 0.35 * exp(-liner * 45.0);
+      }
+      gl_FragColor = vec4(clamp(c * u_bright, 0.0, 1.0), 1.0);
       return;
     }
     uv *= 1.3;
@@ -762,23 +820,42 @@ void main(){
       land = mix(land, vec3(0.13, 0.16, 0.13), smoothstep(0.3, 1.5, foot));
       land *= light;
     }
-    // City lights: single points where the land is built up, averaged to a
-    // glow once a pixel covers several of them (or they would sparkle)
-    // City lights: POINTS, one per small ground cell at a random spot in it,
-    // lit only where the land there is built up, each its own brightness.
-    // A point is never drawn smaller than about a pixel, and its brightness
-    // is spread over its size (energy kept), so as it shrinks into the
-    // distance it becomes the soft glow of a town instead of flickering.
+    // City lights: POINTS, one per ground cell at a random spot in it, lit
+    // only where the land there is built up, each its own brightness — at
+    // EVERY distance. A point is drawn one pixel wide: a pixel's footprint
+    // is long ALONG the view (foot) and short across it (foot * -rd.y), so
+    // the point is an ellipse with those two radii, round on the screen.
+    // Further out, where a pixel would near a cell's size (each pixel then
+    // hits or misses its cell's point: sparkle), the cells double in size
+    // (one octave per doubling of the footprint, the two nearest blended):
+    // fewer, still sharp points, so a far town twinkles as a cluster of
+    // lights the way it does from a real flight deck. (The first version drew
+    // every point at least 0.02 wide — several pixels — and handed the far
+    // ground to a glow over the town mask, read once per pixel: broad smudges
+    // and, at a grazing angle, flat bars.)
     if(u_city > 0.0 && dark > 0.0){
-      const float CELL = 0.12;
-      vec2 cell = floor(g / CELL);
-      float on = step(0.45, hash21(cell + 17.0));
-      vec2 at = (cell + 0.2 + 0.6 * vec2(hash21(cell + 3.1), hash21(cell + 9.7))) * CELL;
-      float r = max(0.02, foot * 0.9);
-      float pt = exp(-dot(g - at, g - at) / (r * r)) * min(1.0, (0.02 * 0.02) / (r * r));
-      float glow = 0.12 * smoothstep(0.03, 0.12, foot);   // far: the average of the points
-      float lamp = (0.5 + hash21(cell + 5.3)) * on;
-      land += cityCol * cfUrban(on > 0.5 ? at : g) * (pt * lamp * 10.0 + glow) * u_city * dark;
+      vec2 ax = normalize(rd.xz + vec2(1e-5, 0.0));
+      vec2 ac = vec2(ax.y, 0.0 - ax.x);
+      float ra = max(foot * 0.75, 1e-4);
+      float rc = max(foot * max(-rd.y, 0.03) * 0.75, 1e-4);
+      // (the octave follows the pixel's MEAN size on the ground, so the cells
+      // stay a few pixels apart on the screen both ways)
+      float lev = clamp(log2(sqrt(ra * rc) / (0.36 * 0.12)), 0.0, 6.0);
+      float l0 = floor(lev);
+      float lights = 0.0;
+      for(int k = 0; k < 2; k++){
+        float cs = 0.12 * exp2(l0 + float(k));
+        vec2 cell = floor(g / cs);
+        vec2 sd2 = cell + 37.0 * (l0 + float(k));   // each octave its own lamps
+        vec2 at = (cell + 0.2 + 0.6 * vec2(hash21(sd2 + 3.1), hash21(sd2 + 9.7))) * cs;
+        float lamp = (0.5 + hash21(sd2 + 5.3)) * step(0.45, hash21(sd2 + 17.0));
+        vec2 dl = vec2(dot(g - at, ax), dot(g - at, ac)) / vec2(ra, rc);
+        float w = k == 0 ? 1.0 - fract(lev) : fract(lev);
+        // a sharp core and a faint halo three pixels wide
+        float q = dot(dl, dl);
+        lights += w * (exp(-q) + 0.12 * exp(-q * 0.11)) * lamp * cfUrban(at);
+      }
+      land += cityCol * lights * 4.5 * u_city * dark;
     }
     bg = mix(land, fogc, max(1.0 - exp(-tg * haze * 0.6), smoothstep(40.0, 150.0, tg)));
     // a sun (or moon) on the horizon sinks softly into the far haze rather
@@ -928,12 +1005,9 @@ void main(){
   col = 1.0 - exp(-col * 1.25);
 
   if(framed){
-    // the plastic bezel round the pane, and a faint tint on the glass
+    // the double pane: a faint tint, and the view darkening towards the seal
     col *= vec3(0.96, 0.98, 1.0);
-    float bez = smoothstep(0.0, 0.01, win) * (1.0 - smoothstep(0.035, 0.045, win));
-    float lum = dot(amb + sun * max(el, 0.0) * 0.4, vec3(0.33));
-    vec3 bezel = vec3(0.62, 0.61, 0.60) * (0.15 + 0.6 * clamp(lum, 0.0, 1.2)) * (0.7 + 0.3 * smoothstep(0.0, 0.045, win));
-    col = mix(col, bezel, bez);
+    col *= 0.82 + 0.18 * smoothstep(0.0, 0.025, 0.0 - win);
   }
   gl_FragColor = vec4(clamp(col * u_bright, 0.0, 1.0), 1.0);
 }
@@ -958,7 +1032,7 @@ const T = {
     "glerr": "WebGL ist in diesem Browser nicht verfügbar.",
     "hud.time": "Zeit", "hud.type": "Typ", "hud.pause": "Pause", "hud.play": "Weiter", "hud.full": "Vollbild",
     "p.scenes": "Szenen", "p.view": "Ansicht", "p.light": "Licht & Wetter",
-    "v.0": "Cockpit", "v.1": "Seite", "v.2": "Kabine",
+    "v.0": "Cockpit", "v.1": "Seite", "v.2": "A320", "f.shade": "Sonnenblende",
     "f.daylight": "Tageslicht", "f.tod": "Uhrzeit", "f.ctype": "Wolkentyp", "f.flash": "Blitz auslösen",
     "f.altitude": "Flughöhe", "f.cover": "Bedeckung", "f.holes": "Wolkenlücken", "f.speed": "Geschwindigkeit",
     "f.rays": "Lichtstrahlen", "f.city": "Stadtlichter", "f.lightning": "Gewitter", "f.sun": "Sonnenrichtung",
@@ -966,13 +1040,13 @@ const T = {
     "ctype": ["Cumulus", "Wolkenmeer", "Aufgetürmte Cumulus", "Stratus / Nebelmeer", "Altocumulus", "Wolkenstraßen", "Reiseflughöhe"],
     "scenes": {
       cruise: ["Reiseflug", "Seitenfenster, Mittag"],
-      golden: ["Kabinenfenster", "Goldene Stunde"],
+      golden: ["A320-Fenster", "Goldene Stunde, Blende"],
       night: ["Nachtflug", "Städte durch Lücken"],
       storm: ["Gewitter voraus", "Blaue Stunde, Blitze"],
       dawn: ["Nebelmeer", "Sonnenaufgang, Strahlen"],
       day24: ["24 h im Zeitraffer", "ein Tag in 40 s"],
     },
-    "facts": [["7", "Wolkentypen"], ["24 h", "stufenloser Tageslauf"], ["3", "Blickwinkel: Cockpit, Seite, Kabinenfenster"], ["96", "Messpunkte je Pixel und Bild, maximal"], ["0", "Videodateien"]],
+    "facts": [["7", "Wolkentypen"], ["24 h", "stufenloser Tageslauf"], ["3", "Blickwinkel: Cockpit, Seite, A320-Kabinenfenster"], ["96", "Messpunkte je Pixel und Bild, maximal"], ["0", "Videodateien"]],
     "how.h": "So entsteht das Bild",
     "how.intro": "Für jeden Bildpunkt und jedes Bild durchläuft der Shader dieselbe Kette. Alles geschieht im Fragment-Shader der Grafikkarte, ohne vorberechnete Daten außer einem Satellitenbild für den Boden.",
     "steps": [
@@ -985,10 +1059,10 @@ const T = {
     "use.h": "Einsatz in Kabine und Präsentation",
     "use.intro": "In Exaplay ist der Generator ein Clip wie jedes Video: Er liegt auf Timeline oder Cueliste, wird auf beliebige Ausgänge gemappt und läuft über mehrere Rechner und Projektoren. Weil das Bild berechnet und nicht abgespielt wird, passt es sich jedem Format an und läuft beliebig lange ohne sichtbare Wiederholung. Die Schaltflächen zeigen jeweils ein Beispiel oben im Live-Bild.",
     "uses": [
-      ["Virtuelle Fenster", "Ausblick, wo es kein Fenster gibt", "Displays oder Projektion in fensterlosen Bereichen wie Crew-Rest, Lounges oder Kabinen-Mockups. Die Ansicht „Kabine“ bringt den Fensterrahmen gleich mit, die Wandfarbe folgt dem Tageslicht.", "golden"],
+      ["Virtuelle Fenster", "Ausblick, wo es kein Fenster gibt", "Displays oder Projektion in fensterlosen Bereichen wie Crew-Rest, Lounges oder Kabinen-Mockups. Die Ansicht „A320-Fenster“ zeigt das Kabinenfenster einer A320 mit Verkleidung und Sonnenblende, die Wand folgt dem Tageslicht.", "golden"],
       ["Showroom und Messe", "Ein Mockup, das fliegt", "Ein Kabinen-Mockup mit lebendigem Ausblick statt Standbild. Läuft stundenlang ohne Schleife und in jeder Auflösung, vom einzelnen Fenster-Display bis zur großen Projektion.", "cruise"],
       ["Licht- und Tagesszenarien", "Ein ganzer Tag in einem Regler", "Der Modus „Nach Uhrzeit“ fährt stufenlos von Nacht über Dämmerung und Mittag bis Sonnenuntergang. So lässt sich der Ausblick an Kabinen-Lichtstimmungen oder an die Ortszeit am Ziel anpassen.", "day24"],
-      ["Datengetrieben", "Flugphase, Uhrzeit, Klang", "Uhrzeit, Flughöhe, Geschwindigkeit, Bedeckung und Gewitter sind bindbar. Ein Wert per OSC, Art-Net oder Data Track bewegt den Himmel, ein Audiopegel kann Blitze auslösen.", "storm"],
+      ["Datengetrieben", "Flugphase, Uhrzeit, Klang", "Uhrzeit, Flughöhe, Geschwindigkeit, Bedeckung, Gewitter und die Sonnenblende sind bindbar. Ein Wert per OSC, Art-Net oder Data Track bewegt den Himmel, ein Audiopegel kann Blitze auslösen.", "storm"],
       ["Viele Displays, ein Moment", "Synchron ohne Videoverteilung", "Das Bild hängt allein von der Clip-Zeit und den Parametern ab. Im Exaplay-Verbund zeigt jeder Rechner denselben Moment, auch dieselben Blitze, ohne dass Videodaten verteilt werden.", "night"],
       ["Eigene Region", "Der Boden unter der Route", "Das Bodenbild ist austauschbar: ein Satelliten- oder Luftbild der eigenen Strecke, eines Werks oder einer Zielregion. Bei Nacht leuchten dort automatisch die Siedlungen.", "dawn"],
     ],
@@ -1000,7 +1074,8 @@ const T = {
       ["Tageslicht", "7 Stimmungen + Uhrzeit", "", "Sonnenstand, Farbe von Sonne, Himmel und Schatten"],
       ["Uhrzeit", "0 – 24 h", "y", "Stufenloser Tageslauf inkl. Mond und Sternen"],
       ["Wolkentyp", "7 Typen", "", "Form der Decke: Höhe, Größe und Streckung der Wolken"],
-      ["Ansicht", "Cockpit · Seite · Kabine", "", "Blickrichtung, Kabine mit Fensterrahmen"],
+      ["Ansicht", "Cockpit · Seite · A320-Fenster", "", "Blickrichtung; A320-Kabinenfenster mit Verkleidung"],
+      ["Sonnenblende", "0 – 1", "y", "Zieht die Blende des A320-Fensters herunter"],
       ["Flughöhe", "0 – 1", "y", "Durch die Wolken bis weit darüber"],
       ["Bedeckung / Dichte", "0 – 1 / 0,1 – 3", "y", "Wie viel Himmel die Wolken einnehmen, wie dicht sie sind"],
       ["Wolkenlücken", "0 – 1", "y", "Öffnungen, durch die der Boden sichtbar wird"],
@@ -1023,7 +1098,7 @@ const T = {
     "glerr": "WebGL is not available in this browser.",
     "hud.time": "Time", "hud.type": "Type", "hud.pause": "Pause", "hud.play": "Play", "hud.full": "Fullscreen",
     "p.scenes": "Scenes", "p.view": "View", "p.light": "Light & weather",
-    "v.0": "Cockpit", "v.1": "Side", "v.2": "Cabin",
+    "v.0": "Cockpit", "v.1": "Side", "v.2": "A320", "f.shade": "Window shade",
     "f.daylight": "Daylight", "f.tod": "Time of day", "f.ctype": "Cloud type", "f.flash": "Trigger lightning",
     "f.altitude": "Altitude", "f.cover": "Coverage", "f.holes": "Cloud gaps", "f.speed": "Airspeed",
     "f.rays": "Light rays", "f.city": "City lights", "f.lightning": "Thunderstorm", "f.sun": "Sun direction",
@@ -1031,13 +1106,13 @@ const T = {
     "ctype": ["Cumulus", "Sea of clouds", "Towering cumulus", "Stratus / fog sea", "Altocumulus", "Cloud streets", "High cruise"],
     "scenes": {
       cruise: ["Cruise", "Side window, noon"],
-      golden: ["Cabin window", "Golden hour"],
+      golden: ["A320 window", "Golden hour, shade"],
       night: ["Night flight", "Cities through gaps"],
       storm: ["Storm ahead", "Blue hour, lightning"],
       dawn: ["Fog sea", "Sunrise, light rays"],
       day24: ["24 h time-lapse", "one day in 40 s"],
     },
-    "facts": [["7", "cloud types"], ["24 h", "continuous day cycle"], ["3", "views: cockpit, side, cabin window"], ["96", "samples per pixel per frame, at most"], ["0", "video files"]],
+    "facts": [["7", "cloud types"], ["24 h", "continuous day cycle"], ["3", "views: cockpit, side, A320 cabin window"], ["96", "samples per pixel per frame, at most"], ["0", "video files"]],
     "how.h": "How the picture is made",
     "how.intro": "For every pixel of every frame the shader runs the same chain. It all happens in the GPU's fragment shader, with no precomputed data apart from one satellite image for the ground.",
     "steps": [
@@ -1050,10 +1125,10 @@ const T = {
     "use.h": "In the cabin and on stage",
     "use.intro": "In Exaplay the generator is a clip like any video: it sits on the timeline or a cue list, is mapped to any outputs and runs across several machines and projectors. Because the picture is computed rather than played back, it fits any format and runs for as long as needed without a visible repeat. Each button shows an example in the live view above.",
     "uses": [
-      ["Virtual windows", "A view where there is no window", "Displays or projection in windowless areas such as crew rest, lounges or cabin mock-ups. The Cabin view brings the window frame with it, and the wall follows the daylight.", "golden"],
+      ["Virtual windows", "A view where there is no window", "Displays or projection in windowless areas such as crew rest, lounges or cabin mock-ups. The A320 window view shows an A320 cabin window with its bezel and shade, and the wall follows the daylight.", "golden"],
       ["Showroom and trade fair", "A mock-up that flies", "A cabin mock-up with a living view instead of a still. Runs for hours without a loop and at any resolution, from a single window display to a large projection.", "cruise"],
       ["Light and time-of-day scenarios", "A whole day on one fader", "The By time of day mode moves continuously from night through dawn and noon to sunset, so the view can follow cabin lighting moods or the local time at the destination.", "day24"],
-      ["Data-driven", "Flight phase, clock, sound", "Time of day, altitude, airspeed, coverage and thunderstorm are bindable. A value arriving by OSC, Art-Net or a Data Track moves the sky, and an audio level can trigger lightning.", "storm"],
+      ["Data-driven", "Flight phase, clock, sound", "Time of day, altitude, airspeed, coverage, thunderstorm and the window shade are bindable. A value arriving by OSC, Art-Net or a Data Track moves the sky, and an audio level can trigger lightning.", "storm"],
       ["Many displays, one moment", "In sync without distributing video", "The picture depends only on clip time and parameters. Across an Exaplay cluster every machine shows the same moment, the same lightning included, with no video data to distribute.", "night"],
       ["Your own region", "The ground below the route", "The ground image can be swapped: a satellite or aerial image of your own route, a plant or a destination region. At night its settlements light up automatically.", "dawn"],
     ],
@@ -1065,7 +1140,8 @@ const T = {
       ["Daylight", "7 moods + time of day", "", "Sun position, colour of sun, sky and shadows"],
       ["Time of day", "0 – 24 h", "y", "Continuous day cycle including moon and stars"],
       ["Cloud type", "7 types", "", "Shape of the deck: height, size and stretch of the clouds"],
-      ["View", "Cockpit · Side · Cabin", "", "Viewing direction; Cabin adds the window frame"],
+      ["View", "Cockpit · Side · A320 window", "", "Viewing direction; an A320 cabin window with its bezel"],
+      ["Window shade", "0 – 1", "y", "Pulls the A320 window's shade down"],
       ["Altitude", "0 – 1", "y", "Through the clouds to far above them"],
       ["Coverage / Density", "0 – 1 / 0.1 – 3", "y", "How much sky the clouds take, how dense they are"],
       ["Cloud gaps", "0 – 1", "y", "Openings through which the ground shows"],
@@ -1087,7 +1163,7 @@ try { const l = localStorage.getItem("cf-lang"); if (l === "en" || l === "de") l
 const P = {
   daylight: 3, tod: 18.5, ctype: 0, view: 0, speed: 1, bright: 1, altitude: 0.45, cover: 0.55,
   density: 1, holes: 0, holesize: 1, puff: 1, sun: 0.06, haze: 1, rays: 0.6, city: 1,
-  lightning: 0, flash: 0, bank: 1, quality: 56, groundscale: 30,
+  lightning: 0, flash: 0, bank: 1, quality: 56, groundscale: 30, shade: 0,
 };
 const BASE = { ...P };
 const SLIDERS = [
@@ -1096,7 +1172,7 @@ const SLIDERS = [
 ];
 const SCENES = {
   cruise: { daylight: 2, ctype: 6, view: 1, altitude: 0.8, cover: 0.55, rays: 0.6, sun: 0.06 },
-  golden: { daylight: 3, ctype: 0, view: 2, altitude: 0.45, cover: 0.55, rays: 0.9, sun: 0.12 },
+  golden: { daylight: 3, ctype: 0, view: 2, altitude: 0.45, cover: 0.55, rays: 0.9, sun: 0.12, shade: 0.3 },
   night: { daylight: 6, ctype: 1, view: 1, altitude: 0.6, cover: 0.45, holes: 0.7, city: 2.2, speed: 1.3, sun: 0.3 },
   storm: { daylight: 5, ctype: 2, view: 0, altitude: 0.35, cover: 0.6, lightning: 0.55, speed: 1.4, city: 1.5 },
   dawn: { daylight: 0, ctype: 3, view: 0, altitude: 0.55, cover: 0.6, holes: 0.25, rays: 1.4, sun: 0.02 },
@@ -1167,6 +1243,8 @@ function syncUI() {
     $("#o-" + k).textContent = k === "speed" ? P[k].toFixed(2) + "×" : P[k].toFixed(2);
   });
   $$("#seg-view button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.v === P.view)));
+  const sh = $("#r-shade"); sh.value = P.shade; sh.disabled = P.view !== 2;
+  $("#o-shade").textContent = P.view === 2 ? Math.round(P.shade * 100) + " %" : "–";
   $$("#scenes .scene").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.scene === scene)));
   $("#h-time").textContent = byTime ? fmtH(P.tod) : t.daylight[P.daylight];
   $("#h-type").textContent = t.ctype[P.ctype];
@@ -1188,6 +1266,7 @@ function wireStatic() {
   $("#s-daylight").addEventListener("change", (e) => { P.daylight = +e.target.value; manual(); syncUI(); });
   $("#s-ctype").addEventListener("change", (e) => { P.ctype = +e.target.value; manual(); syncUI(); });
   $("#r-tod").addEventListener("input", (e) => { P.tod = +e.target.value; manual(); syncUI(); });
+  $("#r-shade").addEventListener("input", (e) => { P.shade = +e.target.value; manual(); syncUI(); });
   $$("#seg-view button").forEach((b) => b.addEventListener("click", () => { P.view = +b.dataset.v; manual(); syncUI(); }));
   $("#b-flash").addEventListener("click", () => { flashT = 0; });
   $("#b-pause").addEventListener("click", () => { paused = !paused; syncUI(); });

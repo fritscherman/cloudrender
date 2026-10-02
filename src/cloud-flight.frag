@@ -75,6 +75,7 @@ uniform float u_rays;      // Light rays: sunlight scattered in the clear air
 uniform float u_city;      // City lights at night
 uniform float u_lightning; // automatic lightning, strikes per time
 uniform float u_flash;     // a flash held by hand / a binding (0..1)
+uniform float u_shade;     // Cabin window: how far its shade is pulled down (0 open .. 1 closed)
 uniform sampler2D u_ground;
 uniform float u_ground_set;
 uniform float u_groundscale;
@@ -274,6 +275,21 @@ float cfRoundBox(vec2 p, vec2 b, float r){
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 
+// The cabin window, A320 style. Three nested rounded rectangles in picture
+// units (the picture is 1 tall): the PANE (the outside world), the TRACK the
+// shade runs in, a little wider than the pane, and the LINER — the opening
+// of the white window bezel in the cabin wall, much larger, so the wall
+// slopes in towards the pane as a deep, light-catching reveal. The pane has
+// the proportions of the A320's opening in the skin, 9 1/4 x 13 3/16 in
+// (1 : 1.43; a 737's is 10 1/4 x 14 3/8), slightly oval: strongly rounded
+// corners. The liner and track are drawn after photographs of the cabin.
+const vec2  CF_PANE = vec2(0.2, 0.285);
+const float CF_PANE_R = 0.13;
+const vec2  CF_TRACK = vec2(0.227, 0.318);
+const float CF_TRACK_R = 0.15;
+const vec2  CF_LINER = vec2(0.315, 0.415);
+const float CF_LINER_R = 0.21;
+
 void main(){
   vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
   float t = u_time;
@@ -297,17 +313,55 @@ void main(){
   vec3 cityCol = vec3(1.0, 0.62, 0.3);
   vec3 flashCol = vec3(0.78, 0.82, 1.0);
 
-  // the cabin window: an oval opening in the wall panel
+  // the cabin window (A320): the shade, the bezel's reveal and the wall are
+  // drawn here and return; only the pane goes on to the sky
   bool framed = u_view > 1.5;
   float win = 0.0;
   if(framed){
-    win = cfRoundBox(uv, vec2(0.25, 0.36), 0.2);
-    if(win > 0.045){
-      float lum = dot(amb + sun * max(el, 0.0) * 0.4, vec3(0.33));
-      vec3 wall = vec3(0.86, 0.84, 0.80) * (0.18 + 0.7 * clamp(lum, 0.0, 1.2));
-      wall *= 0.85 + 0.15 * smoothstep(-0.6, 0.6, uv.y);
-      wall *= 1.0 - 0.5 * exp(-(win - 0.045) * 40.0);   // the reveal's shadow
-      gl_FragColor = vec4(clamp(wall * u_bright, 0.0, 1.0), 1.0);
+    win = cfRoundBox(uv, CF_PANE, CF_PANE_R);
+    float liner = cfRoundBox(uv, CF_LINER, CF_LINER_R);
+    float track = cfRoundBox(uv, CF_TRACK, CF_TRACK_R);
+    // the cabin's light on the wall, and the daylight coming IN through
+    // the window (what lights the reveal and glows through the shade)
+    float lum = clamp(dot(amb + sun * max(el, 0.0) * 0.4, vec3(0.33)), 0.0, 1.2);
+    vec3 inLight = sun * max(el + 0.05, 0.0) * 0.35 + amb * 0.45;
+    vec3 plastic = vec3(0.90, 0.89, 0.86);
+    // The shade: pulled down from the top of its track by u_shade, a
+    // moulded panel with a lip and a finger tab at its lower edge. It is
+    // lit from the cabin and glows faintly with the daylight behind it.
+    float shade = clamp(u_shade, 0.0, 1.0);
+    float edgeY = CF_TRACK.y - shade * 2.0 * CF_TRACK.y;
+    float tab = step(abs(uv.x), 0.032) * step(edgeY - 0.016, uv.y);
+    if(shade > 0.001 && track < 0.0 && (uv.y > edgeY || tab > 0.5)){
+      float e = uv.y - edgeY;
+      vec3 sc = plastic * (0.16 + 0.62 * lum) + inLight * 0.22;
+      sc *= 0.985 + 0.015 * sin(uv.y * 180.0);                   // a faint moulded grain
+      sc *= 0.72 + 0.28 * smoothstep(0.0, 0.014, e);             // the lip's underside
+      sc += plastic * 0.10 * (1.0 - smoothstep(0.0, 0.004, abs(e - 0.016)));  // its top edge
+      sc *= 0.8 + 0.2 * smoothstep(0.0, 0.012, 0.0 - track);     // shadow of the track
+      gl_FragColor = vec4(clamp(sc * u_bright, 0.0, 1.0), 1.0);
+      return;
+    }
+    if(win > 0.0){
+      vec3 c;
+      if(liner < 0.0){
+        // the reveal: 0 at the pane, 1 at the bezel's rim. Lit by the
+        // window, brightest close to the pane and on the sill below it,
+        // in shadow under the top; a dark rubber seal round the pane.
+        float k = clamp(win / max(win - liner, 1e-3), 0.0, 1.0);
+        float lit = 0.62 + 0.38 * (1.0 - k);
+        lit *= 1.0 + 0.22 * (1.0 - smoothstep(-0.3, 0.0, uv.y));
+        lit *= 1.0 - 0.3 * smoothstep(0.0, 0.32, uv.y) * (1.0 - k);
+        c = plastic * (0.16 + 0.6 * lum) * lit + inLight * 0.3 * (1.0 - k);
+        c *= 0.35 + 0.65 * smoothstep(0.0, 0.009, win);           // the seal
+        c *= 1.0 + 0.12 * (1.0 - smoothstep(0.0, 0.01, 0.0 - liner));  // the rim's highlight
+      } else {
+        // the wall panel round the bezel, the bezel casting a soft shadow
+        c = vec3(0.86, 0.84, 0.80) * (0.18 + 0.7 * lum);
+        c *= 0.85 + 0.15 * smoothstep(-0.6, 0.6, uv.y);
+        c *= 1.0 - 0.35 * exp(-liner * 45.0);
+      }
+      gl_FragColor = vec4(clamp(c * u_bright, 0.0, 1.0), 1.0);
       return;
     }
     uv *= 1.3;
@@ -417,23 +471,42 @@ void main(){
       land = mix(land, vec3(0.13, 0.16, 0.13), smoothstep(0.3, 1.5, foot));
       land *= light;
     }
-    // City lights: single points where the land is built up, averaged to a
-    // glow once a pixel covers several of them (or they would sparkle)
-    // City lights: POINTS, one per small ground cell at a random spot in it,
-    // lit only where the land there is built up, each its own brightness.
-    // A point is never drawn smaller than about a pixel, and its brightness
-    // is spread over its size (energy kept), so as it shrinks into the
-    // distance it becomes the soft glow of a town instead of flickering.
+    // City lights: POINTS, one per ground cell at a random spot in it, lit
+    // only where the land there is built up, each its own brightness — at
+    // EVERY distance. A point is drawn one pixel wide: a pixel's footprint
+    // is long ALONG the view (foot) and short across it (foot * -rd.y), so
+    // the point is an ellipse with those two radii, round on the screen.
+    // Further out, where a pixel would near a cell's size (each pixel then
+    // hits or misses its cell's point: sparkle), the cells double in size
+    // (one octave per doubling of the footprint, the two nearest blended):
+    // fewer, still sharp points, so a far town twinkles as a cluster of
+    // lights the way it does from a real flight deck. (The first version drew
+    // every point at least 0.02 wide — several pixels — and handed the far
+    // ground to a glow over the town mask, read once per pixel: broad smudges
+    // and, at a grazing angle, flat bars.)
     if(u_city > 0.0 && dark > 0.0){
-      const float CELL = 0.12;
-      vec2 cell = floor(g / CELL);
-      float on = step(0.45, hash21(cell + 17.0));
-      vec2 at = (cell + 0.2 + 0.6 * vec2(hash21(cell + 3.1), hash21(cell + 9.7))) * CELL;
-      float r = max(0.02, foot * 0.9);
-      float pt = exp(-dot(g - at, g - at) / (r * r)) * min(1.0, (0.02 * 0.02) / (r * r));
-      float glow = 0.12 * smoothstep(0.03, 0.12, foot);   // far: the average of the points
-      float lamp = (0.5 + hash21(cell + 5.3)) * on;
-      land += cityCol * cfUrban(on > 0.5 ? at : g) * (pt * lamp * 10.0 + glow) * u_city * dark;
+      vec2 ax = normalize(rd.xz + vec2(1e-5, 0.0));
+      vec2 ac = vec2(ax.y, 0.0 - ax.x);
+      float ra = max(foot * 0.75, 1e-4);
+      float rc = max(foot * max(-rd.y, 0.03) * 0.75, 1e-4);
+      // (the octave follows the pixel's MEAN size on the ground, so the cells
+      // stay a few pixels apart on the screen both ways)
+      float lev = clamp(log2(sqrt(ra * rc) / (0.36 * 0.12)), 0.0, 6.0);
+      float l0 = floor(lev);
+      float lights = 0.0;
+      for(int k = 0; k < 2; k++){
+        float cs = 0.12 * exp2(l0 + float(k));
+        vec2 cell = floor(g / cs);
+        vec2 sd2 = cell + 37.0 * (l0 + float(k));   // each octave its own lamps
+        vec2 at = (cell + 0.2 + 0.6 * vec2(hash21(sd2 + 3.1), hash21(sd2 + 9.7))) * cs;
+        float lamp = (0.5 + hash21(sd2 + 5.3)) * step(0.45, hash21(sd2 + 17.0));
+        vec2 dl = vec2(dot(g - at, ax), dot(g - at, ac)) / vec2(ra, rc);
+        float w = k == 0 ? 1.0 - fract(lev) : fract(lev);
+        // a sharp core and a faint halo three pixels wide
+        float q = dot(dl, dl);
+        lights += w * (exp(-q) + 0.12 * exp(-q * 0.11)) * lamp * cfUrban(at);
+      }
+      land += cityCol * lights * 4.5 * u_city * dark;
     }
     bg = mix(land, fogc, max(1.0 - exp(-tg * haze * 0.6), smoothstep(40.0, 150.0, tg)));
     // a sun (or moon) on the horizon sinks softly into the far haze rather
@@ -583,12 +656,9 @@ void main(){
   col = 1.0 - exp(-col * 1.25);
 
   if(framed){
-    // the plastic bezel round the pane, and a faint tint on the glass
+    // the double pane: a faint tint, and the view darkening towards the seal
     col *= vec3(0.96, 0.98, 1.0);
-    float bez = smoothstep(0.0, 0.01, win) * (1.0 - smoothstep(0.035, 0.045, win));
-    float lum = dot(amb + sun * max(el, 0.0) * 0.4, vec3(0.33));
-    vec3 bezel = vec3(0.62, 0.61, 0.60) * (0.15 + 0.6 * clamp(lum, 0.0, 1.2)) * (0.7 + 0.3 * smoothstep(0.0, 0.045, win));
-    col = mix(col, bezel, bez);
+    col *= 0.82 + 0.18 * smoothstep(0.0, 0.025, 0.0 - win);
   }
   gl_FragColor = vec4(clamp(col * u_bright, 0.0, 1.0), 1.0);
 }

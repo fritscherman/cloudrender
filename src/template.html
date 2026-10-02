@@ -224,7 +224,11 @@ footer p { margin: 0; max-width: 80ch; }
           <div class="seg" id="seg-view">
             <button type="button" data-v="0" data-t="v.0">Cockpit</button>
             <button type="button" data-v="1" data-t="v.1">Seite</button>
-            <button type="button" data-v="2" data-t="v.2">Kabine</button>
+            <button type="button" data-v="2" data-t="v.2">A320</button>
+          </div>
+          <div class="field">
+            <label for="r-shade"><span data-t="f.shade">Sonnenblende</span><output id="o-shade"></output></label>
+            <input type="range" id="r-shade" min="0" max="1" step="0.01">
           </div>
         </div>
 
@@ -358,7 +362,7 @@ const T = {
     "glerr": "WebGL ist in diesem Browser nicht verfügbar.",
     "hud.time": "Zeit", "hud.type": "Typ", "hud.pause": "Pause", "hud.play": "Weiter", "hud.full": "Vollbild",
     "p.scenes": "Szenen", "p.view": "Ansicht", "p.light": "Licht & Wetter",
-    "v.0": "Cockpit", "v.1": "Seite", "v.2": "Kabine",
+    "v.0": "Cockpit", "v.1": "Seite", "v.2": "A320", "f.shade": "Sonnenblende",
     "f.daylight": "Tageslicht", "f.tod": "Uhrzeit", "f.ctype": "Wolkentyp", "f.flash": "Blitz auslösen",
     "f.altitude": "Flughöhe", "f.cover": "Bedeckung", "f.holes": "Wolkenlücken", "f.speed": "Geschwindigkeit",
     "f.rays": "Lichtstrahlen", "f.city": "Stadtlichter", "f.lightning": "Gewitter", "f.sun": "Sonnenrichtung",
@@ -366,13 +370,13 @@ const T = {
     "ctype": ["Cumulus", "Wolkenmeer", "Aufgetürmte Cumulus", "Stratus / Nebelmeer", "Altocumulus", "Wolkenstraßen", "Reiseflughöhe"],
     "scenes": {
       cruise: ["Reiseflug", "Seitenfenster, Mittag"],
-      golden: ["Kabinenfenster", "Goldene Stunde"],
+      golden: ["A320-Fenster", "Goldene Stunde, Blende"],
       night: ["Nachtflug", "Städte durch Lücken"],
       storm: ["Gewitter voraus", "Blaue Stunde, Blitze"],
       dawn: ["Nebelmeer", "Sonnenaufgang, Strahlen"],
       day24: ["24 h im Zeitraffer", "ein Tag in 40 s"],
     },
-    "facts": [["7", "Wolkentypen"], ["24 h", "stufenloser Tageslauf"], ["3", "Blickwinkel: Cockpit, Seite, Kabinenfenster"], ["96", "Messpunkte je Pixel und Bild, maximal"], ["0", "Videodateien"]],
+    "facts": [["7", "Wolkentypen"], ["24 h", "stufenloser Tageslauf"], ["3", "Blickwinkel: Cockpit, Seite, A320-Kabinenfenster"], ["96", "Messpunkte je Pixel und Bild, maximal"], ["0", "Videodateien"]],
     "how.h": "So entsteht das Bild",
     "how.intro": "Für jeden Bildpunkt und jedes Bild durchläuft der Shader dieselbe Kette. Alles geschieht im Fragment-Shader der Grafikkarte, ohne vorberechnete Daten außer einem Satellitenbild für den Boden.",
     "steps": [
@@ -385,10 +389,10 @@ const T = {
     "use.h": "Einsatz in Kabine und Präsentation",
     "use.intro": "In Exaplay ist der Generator ein Clip wie jedes Video: Er liegt auf Timeline oder Cueliste, wird auf beliebige Ausgänge gemappt und läuft über mehrere Rechner und Projektoren. Weil das Bild berechnet und nicht abgespielt wird, passt es sich jedem Format an und läuft beliebig lange ohne sichtbare Wiederholung. Die Schaltflächen zeigen jeweils ein Beispiel oben im Live-Bild.",
     "uses": [
-      ["Virtuelle Fenster", "Ausblick, wo es kein Fenster gibt", "Displays oder Projektion in fensterlosen Bereichen wie Crew-Rest, Lounges oder Kabinen-Mockups. Die Ansicht „Kabine“ bringt den Fensterrahmen gleich mit, die Wandfarbe folgt dem Tageslicht.", "golden"],
+      ["Virtuelle Fenster", "Ausblick, wo es kein Fenster gibt", "Displays oder Projektion in fensterlosen Bereichen wie Crew-Rest, Lounges oder Kabinen-Mockups. Die Ansicht „A320-Fenster“ zeigt das Kabinenfenster einer A320 mit Verkleidung und Sonnenblende, die Wand folgt dem Tageslicht.", "golden"],
       ["Showroom und Messe", "Ein Mockup, das fliegt", "Ein Kabinen-Mockup mit lebendigem Ausblick statt Standbild. Läuft stundenlang ohne Schleife und in jeder Auflösung, vom einzelnen Fenster-Display bis zur großen Projektion.", "cruise"],
       ["Licht- und Tagesszenarien", "Ein ganzer Tag in einem Regler", "Der Modus „Nach Uhrzeit“ fährt stufenlos von Nacht über Dämmerung und Mittag bis Sonnenuntergang. So lässt sich der Ausblick an Kabinen-Lichtstimmungen oder an die Ortszeit am Ziel anpassen.", "day24"],
-      ["Datengetrieben", "Flugphase, Uhrzeit, Klang", "Uhrzeit, Flughöhe, Geschwindigkeit, Bedeckung und Gewitter sind bindbar. Ein Wert per OSC, Art-Net oder Data Track bewegt den Himmel, ein Audiopegel kann Blitze auslösen.", "storm"],
+      ["Datengetrieben", "Flugphase, Uhrzeit, Klang", "Uhrzeit, Flughöhe, Geschwindigkeit, Bedeckung, Gewitter und die Sonnenblende sind bindbar. Ein Wert per OSC, Art-Net oder Data Track bewegt den Himmel, ein Audiopegel kann Blitze auslösen.", "storm"],
       ["Viele Displays, ein Moment", "Synchron ohne Videoverteilung", "Das Bild hängt allein von der Clip-Zeit und den Parametern ab. Im Exaplay-Verbund zeigt jeder Rechner denselben Moment, auch dieselben Blitze, ohne dass Videodaten verteilt werden.", "night"],
       ["Eigene Region", "Der Boden unter der Route", "Das Bodenbild ist austauschbar: ein Satelliten- oder Luftbild der eigenen Strecke, eines Werks oder einer Zielregion. Bei Nacht leuchten dort automatisch die Siedlungen.", "dawn"],
     ],
@@ -400,7 +404,8 @@ const T = {
       ["Tageslicht", "7 Stimmungen + Uhrzeit", "", "Sonnenstand, Farbe von Sonne, Himmel und Schatten"],
       ["Uhrzeit", "0 – 24 h", "y", "Stufenloser Tageslauf inkl. Mond und Sternen"],
       ["Wolkentyp", "7 Typen", "", "Form der Decke: Höhe, Größe und Streckung der Wolken"],
-      ["Ansicht", "Cockpit · Seite · Kabine", "", "Blickrichtung, Kabine mit Fensterrahmen"],
+      ["Ansicht", "Cockpit · Seite · A320-Fenster", "", "Blickrichtung; A320-Kabinenfenster mit Verkleidung"],
+      ["Sonnenblende", "0 – 1", "y", "Zieht die Blende des A320-Fensters herunter"],
       ["Flughöhe", "0 – 1", "y", "Durch die Wolken bis weit darüber"],
       ["Bedeckung / Dichte", "0 – 1 / 0,1 – 3", "y", "Wie viel Himmel die Wolken einnehmen, wie dicht sie sind"],
       ["Wolkenlücken", "0 – 1", "y", "Öffnungen, durch die der Boden sichtbar wird"],
@@ -423,7 +428,7 @@ const T = {
     "glerr": "WebGL is not available in this browser.",
     "hud.time": "Time", "hud.type": "Type", "hud.pause": "Pause", "hud.play": "Play", "hud.full": "Fullscreen",
     "p.scenes": "Scenes", "p.view": "View", "p.light": "Light & weather",
-    "v.0": "Cockpit", "v.1": "Side", "v.2": "Cabin",
+    "v.0": "Cockpit", "v.1": "Side", "v.2": "A320", "f.shade": "Window shade",
     "f.daylight": "Daylight", "f.tod": "Time of day", "f.ctype": "Cloud type", "f.flash": "Trigger lightning",
     "f.altitude": "Altitude", "f.cover": "Coverage", "f.holes": "Cloud gaps", "f.speed": "Airspeed",
     "f.rays": "Light rays", "f.city": "City lights", "f.lightning": "Thunderstorm", "f.sun": "Sun direction",
@@ -431,13 +436,13 @@ const T = {
     "ctype": ["Cumulus", "Sea of clouds", "Towering cumulus", "Stratus / fog sea", "Altocumulus", "Cloud streets", "High cruise"],
     "scenes": {
       cruise: ["Cruise", "Side window, noon"],
-      golden: ["Cabin window", "Golden hour"],
+      golden: ["A320 window", "Golden hour, shade"],
       night: ["Night flight", "Cities through gaps"],
       storm: ["Storm ahead", "Blue hour, lightning"],
       dawn: ["Fog sea", "Sunrise, light rays"],
       day24: ["24 h time-lapse", "one day in 40 s"],
     },
-    "facts": [["7", "cloud types"], ["24 h", "continuous day cycle"], ["3", "views: cockpit, side, cabin window"], ["96", "samples per pixel per frame, at most"], ["0", "video files"]],
+    "facts": [["7", "cloud types"], ["24 h", "continuous day cycle"], ["3", "views: cockpit, side, A320 cabin window"], ["96", "samples per pixel per frame, at most"], ["0", "video files"]],
     "how.h": "How the picture is made",
     "how.intro": "For every pixel of every frame the shader runs the same chain. It all happens in the GPU's fragment shader, with no precomputed data apart from one satellite image for the ground.",
     "steps": [
@@ -450,10 +455,10 @@ const T = {
     "use.h": "In the cabin and on stage",
     "use.intro": "In Exaplay the generator is a clip like any video: it sits on the timeline or a cue list, is mapped to any outputs and runs across several machines and projectors. Because the picture is computed rather than played back, it fits any format and runs for as long as needed without a visible repeat. Each button shows an example in the live view above.",
     "uses": [
-      ["Virtual windows", "A view where there is no window", "Displays or projection in windowless areas such as crew rest, lounges or cabin mock-ups. The Cabin view brings the window frame with it, and the wall follows the daylight.", "golden"],
+      ["Virtual windows", "A view where there is no window", "Displays or projection in windowless areas such as crew rest, lounges or cabin mock-ups. The A320 window view shows an A320 cabin window with its bezel and shade, and the wall follows the daylight.", "golden"],
       ["Showroom and trade fair", "A mock-up that flies", "A cabin mock-up with a living view instead of a still. Runs for hours without a loop and at any resolution, from a single window display to a large projection.", "cruise"],
       ["Light and time-of-day scenarios", "A whole day on one fader", "The By time of day mode moves continuously from night through dawn and noon to sunset, so the view can follow cabin lighting moods or the local time at the destination.", "day24"],
-      ["Data-driven", "Flight phase, clock, sound", "Time of day, altitude, airspeed, coverage and thunderstorm are bindable. A value arriving by OSC, Art-Net or a Data Track moves the sky, and an audio level can trigger lightning.", "storm"],
+      ["Data-driven", "Flight phase, clock, sound", "Time of day, altitude, airspeed, coverage, thunderstorm and the window shade are bindable. A value arriving by OSC, Art-Net or a Data Track moves the sky, and an audio level can trigger lightning.", "storm"],
       ["Many displays, one moment", "In sync without distributing video", "The picture depends only on clip time and parameters. Across an Exaplay cluster every machine shows the same moment, the same lightning included, with no video data to distribute.", "night"],
       ["Your own region", "The ground below the route", "The ground image can be swapped: a satellite or aerial image of your own route, a plant or a destination region. At night its settlements light up automatically.", "dawn"],
     ],
@@ -465,7 +470,8 @@ const T = {
       ["Daylight", "7 moods + time of day", "", "Sun position, colour of sun, sky and shadows"],
       ["Time of day", "0 – 24 h", "y", "Continuous day cycle including moon and stars"],
       ["Cloud type", "7 types", "", "Shape of the deck: height, size and stretch of the clouds"],
-      ["View", "Cockpit · Side · Cabin", "", "Viewing direction; Cabin adds the window frame"],
+      ["View", "Cockpit · Side · A320 window", "", "Viewing direction; an A320 cabin window with its bezel"],
+      ["Window shade", "0 – 1", "y", "Pulls the A320 window's shade down"],
       ["Altitude", "0 – 1", "y", "Through the clouds to far above them"],
       ["Coverage / Density", "0 – 1 / 0.1 – 3", "y", "How much sky the clouds take, how dense they are"],
       ["Cloud gaps", "0 – 1", "y", "Openings through which the ground shows"],
@@ -487,7 +493,7 @@ try { const l = localStorage.getItem("cf-lang"); if (l === "en" || l === "de") l
 const P = {
   daylight: 3, tod: 18.5, ctype: 0, view: 0, speed: 1, bright: 1, altitude: 0.45, cover: 0.55,
   density: 1, holes: 0, holesize: 1, puff: 1, sun: 0.06, haze: 1, rays: 0.6, city: 1,
-  lightning: 0, flash: 0, bank: 1, quality: 56, groundscale: 30,
+  lightning: 0, flash: 0, bank: 1, quality: 56, groundscale: 30, shade: 0,
 };
 const BASE = { ...P };
 const SLIDERS = [
@@ -496,7 +502,7 @@ const SLIDERS = [
 ];
 const SCENES = {
   cruise: { daylight: 2, ctype: 6, view: 1, altitude: 0.8, cover: 0.55, rays: 0.6, sun: 0.06 },
-  golden: { daylight: 3, ctype: 0, view: 2, altitude: 0.45, cover: 0.55, rays: 0.9, sun: 0.12 },
+  golden: { daylight: 3, ctype: 0, view: 2, altitude: 0.45, cover: 0.55, rays: 0.9, sun: 0.12, shade: 0.3 },
   night: { daylight: 6, ctype: 1, view: 1, altitude: 0.6, cover: 0.45, holes: 0.7, city: 2.2, speed: 1.3, sun: 0.3 },
   storm: { daylight: 5, ctype: 2, view: 0, altitude: 0.35, cover: 0.6, lightning: 0.55, speed: 1.4, city: 1.5 },
   dawn: { daylight: 0, ctype: 3, view: 0, altitude: 0.55, cover: 0.6, holes: 0.25, rays: 1.4, sun: 0.02 },
@@ -567,6 +573,8 @@ function syncUI() {
     $("#o-" + k).textContent = k === "speed" ? P[k].toFixed(2) + "×" : P[k].toFixed(2);
   });
   $$("#seg-view button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.v === P.view)));
+  const sh = $("#r-shade"); sh.value = P.shade; sh.disabled = P.view !== 2;
+  $("#o-shade").textContent = P.view === 2 ? Math.round(P.shade * 100) + " %" : "–";
   $$("#scenes .scene").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.scene === scene)));
   $("#h-time").textContent = byTime ? fmtH(P.tod) : t.daylight[P.daylight];
   $("#h-type").textContent = t.ctype[P.ctype];
@@ -588,6 +596,7 @@ function wireStatic() {
   $("#s-daylight").addEventListener("change", (e) => { P.daylight = +e.target.value; manual(); syncUI(); });
   $("#s-ctype").addEventListener("change", (e) => { P.ctype = +e.target.value; manual(); syncUI(); });
   $("#r-tod").addEventListener("input", (e) => { P.tod = +e.target.value; manual(); syncUI(); });
+  $("#r-shade").addEventListener("input", (e) => { P.shade = +e.target.value; manual(); syncUI(); });
   $$("#seg-view button").forEach((b) => b.addEventListener("click", () => { P.view = +b.dataset.v; manual(); syncUI(); }));
   $("#b-flash").addEventListener("click", () => { flashT = 0; });
   $("#b-pause").addEventListener("click", () => { paused = !paused; syncUI(); });
